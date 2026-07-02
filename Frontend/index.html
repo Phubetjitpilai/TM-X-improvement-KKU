@@ -1,0 +1,1794 @@
+<!DOCTYPE html>
+<!-- Frontend/index.html — TM-X Dashboard (single file, no frameworks)
+     Open directly in browser: Frontend/index.html
+     API base: http://localhost:8000 -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TM-X Dashboard</title>
+  <style>
+    /* ── Variables ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:        #f4f3ef;
+      --surface:   #ffffff;
+      --surface2:  #f7f6f3;
+      --border:    #e3e1da;
+      --accent:    #378ade;
+      --accent2:   #7f77dd;
+      --ok:        #3b6d11;
+      --ok-bg:     #eaf3de;
+      --ng:        #a32d2d;
+      --ng-bg:     #fcebeb;
+      --warn:      #854f0b;
+      --warn-bg:   #faeeda;
+      --text:      #1a1a18;
+      --muted:     #5f5e5a;
+      --radius:    8px;
+      --sidebar-w: 200px;
+    }
+
+    /* ── Reset & base ──────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.45rem 1rem;
+      transition: opacity .15s, background .15s;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button:not(:disabled):hover { opacity: 0.85; }
+    select, input, textarea {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.4rem 0.6rem;
+      font-size: 0.875rem;
+      font-family: inherit;
+    }
+    select:focus, input:focus, textarea:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    /* ── Top bar ───────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      height: 52px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      color: var(--text);
+    }
+    .topbar-title span { color: var(--accent); }
+    /* แถบเมนูนำทางบนสุด — เป็น "ข้อความล้วน" (ไม่ใช่ปุ่ม) ใช้สี --muted ตามปกติ
+       แล้วเปลี่ยนเป็น --accent ตอน hover พร้อม transition นุ่มๆ แบบเดียวกับ
+       element อื่นในไฟล์ (.15s) เพื่อให้กลมกลืนกับธีมเดิม ไม่สร้างชุดสีใหม่ */
+    .topbar-left { display: flex; align-items: center; gap: 1.5rem; }
+    .topbar-nav { display: flex; align-items: center; gap: 1.25rem; }
+    .topbar-link {
+      font-size: 0.85rem;
+      font-weight: normal;
+      color: var(--muted);
+      transition: color .15s;
+    }
+    .topbar-link:hover { color: var(--accent); }
+    .station-badge {
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.3rem 0.85rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+    .station-badge.online     { background: var(--ok-bg);   border-color: var(--ok);   color: var(--ok); }
+    .station-badge.offline    { background: var(--ng-bg);   border-color: var(--ng);   color: var(--ng); }
+    .station-badge.connecting { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+
+    /* ── Layout ────────────────────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      flex: 1;
+    }
+
+    /* ── Main content ──────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+    }
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    /* ── Section 1 — Session Control ───────────────────────────────────── */
+    .session-row {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .session-info { flex: 1; min-width: 180px; }
+    .session-state-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+    .session-state-badge {
+      display: inline-block;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      padding: 0.2rem 0.75rem;
+      border-radius: var(--radius);
+    }
+    .session-state-badge.idle     { background: var(--surface2); color: var(--muted); }
+    .session-state-badge.running  { background: rgba(55,138,222,.12);  color: var(--accent); }
+    .session-state-badge.stopped  { background: var(--surface2); color: var(--muted); }
+    .session-state-badge.timeout  { background: var(--warn-bg);  color: var(--warn); }
+    .session-btns { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+    .btn-start   { background: var(--accent); color: #fff; }
+    .btn-stop    { background: var(--ng);     color: #fff; display: none; }
+
+    .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-group label { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+    .form-group select, .form-group input { min-width: 200px; }
+
+    /* ── Section 2 — Live View ───────────────────────────────────────────── */
+    .live-view-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 760px) {
+      .live-view-grid { grid-template-columns: 1fr; }
+    }
+    .telemetry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .telemetry-alpl-badge {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--surface2);
+      padding: 0.2rem 0.7rem;
+      border-radius: 999px;
+    }
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .telemetry-xy-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .telemetry-cell {
+      background: var(--surface2);
+      border-radius: var(--radius);
+      padding: 0.85rem 1rem;
+    }
+    .telemetry-cell .tc-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .telemetry-cell .tc-value {
+      font-family: 'Courier New', monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+    .telemetry-cell .tc-value span { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+    .telemetry-cell.x .tc-value { color: var(--accent); }
+    .telemetry-cell.y .tc-value { color: var(--accent2); }
+
+    .telemetry-result-col {
+      background: var(--surface2);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.85rem 1rem;
+      transition: background .2s;
+    }
+    .telemetry-result-col.ok { background: var(--ok-bg); }
+    .telemetry-result-col.ng { background: var(--ng-bg); }
+    .telemetry-result-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 700;
+    }
+    .telemetry-result-value {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: .02em;
+      color: var(--muted);
+      line-height: 1;
+    }
+    .telemetry-result-value.ok { color: var(--ok); }
+    .telemetry-result-value.ng { color: var(--ng); }
+    .telemetry-footer {
+      border-top: 1px solid var(--border);
+      padding-top: 0.6rem;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .telemetry-footer strong { color: var(--text); font-weight: 600; }
+
+    .camera-preview-box {
+      position: relative;
+      background: var(--surface2);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      overflow: hidden;
+    }
+    .camera-preview-box img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+    .camera-preview-icon { font-size: 1.8rem; opacity: .5; }
+
+    /* ── Part Entry summary — collapsible dropdown ───────────────────────── */
+    .pe-summary-dropdown {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .pe-summary-toggle {
+      width: 100%;
+      background: var(--surface2);
+      border: none;
+      border-radius: 0;
+      padding: 0.7rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      gap: 0.5rem;
+    }
+    .pe-summary-toggle:hover { background: var(--bg); opacity: 1; }
+    .pe-summary-toggle-left { display: flex; align-items: center; gap: 0.6rem; }
+    .pe-summary-arrow {
+      font-size: 0.7rem;
+      color: var(--muted);
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .pe-summary-arrow.open { transform: rotate(180deg); }
+    .pe-summary-body {
+      display: none;
+      padding: 0.85rem 1rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .pe-summary-body.open { display: block; }
+    .pe-summary-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.3rem 1rem;
+      font-size: 0.83rem;
+    }
+    .pe-summary-grid .pg-label {
+      color: var(--muted);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .pe-summary-grid .pg-value {
+      color: var(--text);
+      word-break: break-word;
+    }
+    .pe-summary-grid .pg-divider {
+      grid-column: 1 / -1;
+      border: none;
+      border-top: 1px dashed var(--border);
+      margin: 0.4rem 0;
+    }
+    .pe-summary-actions {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 0.85rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Section 3 — Stats cards ───────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+    .stat-label { font-size: 0.7rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .stat-value { font-size: 2rem; font-weight: 800; margin-top: 0.3rem; }
+    .stat-value.total  { color: var(--text); }
+    .stat-value.ok     { color: var(--ok); }
+    .stat-value.ng     { color: var(--ng); }
+
+    /* ── Section 4 — Part Entry ──────────────────────────────────────────── */
+    .pe-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .pe-mode-badge-lg {
+      display: inline-block;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+    }
+    .pe-mode-badge-lg.ipm { background: rgba(55,138,222,.12); color: var(--accent); }
+    .pe-mode-badge-lg.new { background: rgba(127,119,221,.15); color: var(--accent2); }
+
+    .entry-toggle {
+      display: inline-flex;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.2rem;
+      margin-bottom: 1rem;
+      gap: 0.2rem;
+    }
+    .entry-toggle-btn {
+      background: transparent;
+      color: var(--muted);
+      padding: 0.4rem 1.25rem;
+      font-weight: 600;
+      border-radius: calc(var(--radius) - 2px);
+    }
+    .entry-toggle-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .entry-toggle-btn:not(.active):hover { opacity: 1; background: var(--surface2); }
+
+    .entry-form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1rem;
+    }
+    .entry-form-grid .form-group.span-2 { grid-column: span 2; }
+    .entry-form-grid label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .entry-form-grid label .req { color: var(--ng); }
+    .entry-form-grid input,
+    .entry-form-grid textarea {
+      width: 100%;
+    }
+    .entry-form-grid textarea { resize: vertical; min-height: 2.4rem; }
+    .field-error {
+      font-size: 0.7rem;
+      color: var(--ng);
+      margin-top: 0.25rem;
+      min-height: 1em;
+    }
+    .entry-form-grid input.invalid,
+    .entry-form-grid textarea.invalid {
+      border-color: var(--ng);
+    }
+    .entry-session-hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.85rem;
+      margin-bottom: 1rem;
+    }
+    .entry-session-hint strong { color: var(--text); }
+    .entry-session-hint.warn { border-color: var(--warn); color: var(--warn); }
+    .entry-placeholder {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 1.75rem 1rem;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+    }
+    .entry-actions { display: flex; gap: 0.6rem; align-items: center; }
+    .btn-submit-entry { background: var(--ok); color: #fff; }
+    .btn-edit-entry { background: var(--accent2); color: #fff; }
+    .entry-status {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .entry-status.success { color: var(--ok); }
+
+    .pe-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 1.5rem 1rem;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+    }
+    .pe-summary {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .pe-summary-rows { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; min-width: 220px; }
+    .pe-summary-row { display: flex; gap: 0.5rem; font-size: 0.85rem; }
+    .pe-summary-row .pe-label { color: var(--muted); min-width: 75px; flex-shrink: 0; }
+    .pe-summary-row .pe-value { color: var(--text); word-break: break-word; }
+    .pe-mode-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      letter-spacing: .03em;
+    }
+    .pe-mode-badge.ipm { background: rgba(55,138,222,.12); color: var(--accent); }
+    .pe-mode-badge.new { background: rgba(127,119,221,.15); color: var(--accent2); }
+    .btn-pe-action { background: var(--accent); color: #fff; flex-shrink: 0; }
+
+    /* ── Part Entry modal ──────────────────────────────────────────────── */
+    .pe-modal-box {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 1.5rem;
+      max-width: 720px;
+      width: 92vw;
+      max-height: 88vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .pe-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .pe-modal-header .card-title { margin-bottom: 0; }
+    .pe-modal-close {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 1.3rem;
+      padding: 0.2rem 0.5rem;
+      line-height: 1;
+    }
+    .pe-modal-close:hover { color: var(--text); }
+
+    /* ── Measurements table ─────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      text-align: left;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    .result-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .result-badge.ok { background: var(--ok-bg); color: var(--ok); }
+    .result-badge.ng { background: var(--ng-bg); color: var(--ng); }
+
+    .img-btn-inner {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.2rem 0.5rem;
+      font-size: 1rem;
+      border-radius: 4px;
+    }
+    .img-btn-inner:hover { background: var(--surface); }
+    .no-img { color: var(--border); }
+
+    @keyframes row-highlight {
+      0%   { background: rgba(55,138,222,.18); }
+      100% { background: transparent; }
+    }
+    .highlight-new td { animation: row-highlight 2.5s ease-out forwards; }
+
+    /* ── Image modal ───────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      max-width: 90vw;
+      max-height: 90vh;
+      position: relative;
+    }
+    .modal-box img {
+      display: block;
+      max-width: 80vw;
+      max-height: 80vh;
+      object-fit: contain;
+    }
+    .modal-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      background: transparent;
+      color: var(--muted);
+      font-size: 1.4rem;
+      padding: 0;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-title">TM-X <span>Dashboard</span></div>
+    <nav class="topbar-nav">
+      <a class="topbar-link" href="index.html">Home</a>
+      <a class="topbar-link" href="edit.html">Edit</a>
+      <a class="topbar-link" href="export.html">Export</a>
+    </nav>
+  </div>
+  <span class="station-badge connecting" id="station-badge">🟡 Connecting</span>
+</header>
+
+<div class="layout">
+  <main class="main">
+
+    <!-- Section 1 — Session Control -->
+    <section id="session">
+      <div class="card">
+        <div class="card-title">Session Control</div>
+        <div class="session-row">
+          <div class="session-info">
+            <div class="session-state-label">Status</div>
+            <div class="session-state-badge idle" id="sess-state-badge">IDLE</div>
+          </div>
+          <div class="session-btns">
+            <button class="btn-start" id="btn-start">▶ Start</button>
+            <button class="btn-stop"  id="btn-stop">■ Stop</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2 — Live View -->
+    <section id="live-view">
+      <div class="live-view-grid">
+        <div class="card">
+          <div class="telemetry-header">
+            <div class="card-title" style="margin-bottom:0">Live Telemetry</div>
+            <span class="telemetry-alpl-badge" id="telemetry-alpl-badge">ALPL —</span>
+          </div>
+          <div class="telemetry-grid">
+            <div class="telemetry-xy-col">
+              <div class="telemetry-cell x">
+                <div class="tc-label">Value X</div>
+                <div class="tc-value" id="telemetry-x">—<span> mm</span></div>
+              </div>
+              <div class="telemetry-cell y">
+                <div class="tc-label">Value Y</div>
+                <div class="tc-value" id="telemetry-y">—<span> mm</span></div>
+              </div>
+            </div>
+            <div class="telemetry-result-col" id="telemetry-result-col">
+              <div class="telemetry-result-label">Result</div>
+              <div class="telemetry-result-value" id="telemetry-result-value">—</div>
+            </div>
+          </div>
+          <div class="telemetry-footer">
+            <span>Session</span>
+            <strong id="telemetry-session-text">— / — measured</strong>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Camera Preview</div>
+          <div class="camera-preview-box" id="camera-preview-box">
+            <span class="camera-preview-icon">🖼</span>
+            <span>No image yet</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3 — Stats -->
+    <section id="stats">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total</div>
+          <div class="stat-value total" id="stat-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">OK</div>
+          <div class="stat-value ok" id="stat-ok">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">NG</div>
+          <div class="stat-value ng" id="stat-ng">0</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4 — Part Entry -->
+    <section id="part-entry">
+      <div class="card">
+        <div class="pe-card-header">
+          <div class="card-title" style="margin-bottom:0">Part Entry</div>
+          <span class="pe-mode-badge-lg" id="pe-mode-badge-lg" style="display:none"></span>
+        </div>
+        <div id="part-entry-summary"></div>
+      </div>
+    </section>
+
+    <!-- Section 5 — Measurements Table -->
+    <section id="measurements">
+      <div class="card">
+        <div class="card-title">Measurements</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Session</th>
+                <th>ALPL</th>
+                <th>Value X</th>
+                <th>Value Y</th>
+                <th>Result</th>
+                <th>Image</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="meas-body">
+              <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Image modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <button class="modal-close" id="modal-close" title="Close">✕</button>
+    <img id="modal-img" src="" alt="Measurement image" />
+  </div>
+</div>
+
+<!-- Confirm modal — ใช้ตอน IPM เจอ ALPL ที่ยังไม่เคยลงทะเบียน ให้ถามก่อนดำเนินการต่อ -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="pe-modal-box" style="max-width:480px">
+    <div class="pe-modal-header">
+      <div class="card-title">ยืนยันการดำเนินการ</div>
+    </div>
+    <div id="confirm-modal-message" style="font-size:0.9rem; line-height:1.6; margin-bottom:1.25rem"></div>
+    <div class="entry-actions" style="justify-content:flex-end">
+      <button type="button" class="btn-edit-entry" id="confirm-modal-cancel">ยกเลิก</button>
+      <button type="button" class="btn-submit-entry" id="confirm-modal-ok">ดำเนินการต่อ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Part Entry modal -->
+<div class="modal-overlay" id="pe-modal">
+  <div class="pe-modal-box">
+    <div class="pe-modal-header">
+      <div class="card-title">Part Entry</div>
+      <button class="pe-modal-close" id="pe-modal-close" title="Close">✕</button>
+    </div>
+
+    <div class="entry-toggle" role="tablist" aria-label="Entry mode">
+      <button class="entry-toggle-btn" id="entry-mode-ipm" data-mode="IPM" role="tab" aria-selected="false">IPM</button>
+      <button class="entry-toggle-btn" id="entry-mode-new" data-mode="New" role="tab" aria-selected="false">New</button>
+    </div>
+
+    <div class="entry-placeholder" id="entry-placeholder">กรุณาเลือกโหมด IPM หรือ New ก่อนกรอกข้อมูล</div>
+
+    <!-- Shared datalist: Package Size (ดึงจาก /api/package-sizes) -->
+    <datalist id="package-size-datalist"></datalist>
+
+    <!-- IPM form -->
+    <form id="form-ipm" novalidate style="display:none">
+      <div class="entry-session-hint" id="ipm-order-hint">— / — session</div>
+      <div class="entry-form-grid">
+        <div class="form-group">
+          <label for="ipm-number_alpl">ALPL <span class="req">*</span></label>
+          <input type="text" id="ipm-number_alpl" placeholder="e.g. 1028, 1029, 1030" />
+          <div class="field-error" id="err-ipm-number_alpl"></div>
+        </div>
+        <div class="form-group">
+          <label for="ipm-operator">Operator <span class="req">*</span></label>
+          <select id="ipm-operator">
+            <option value="">-- เลือก Operator --</option>
+          </select>
+          <div class="field-error" id="err-ipm-operator"></div>
+        </div>
+        <div class="form-group">
+          <label for="ipm-package_size">Package Size</label>
+          <input type="text" id="ipm-package_size" list="package-size-datalist" placeholder="ต้องกรอกถ้ามี ALPL ที่ยังไม่เคยลงทะเบียน" />
+          <div class="field-error" id="err-ipm-package_size"></div>
+        </div>
+        <div class="form-group span-2">
+          <label for="ipm-note">Note</label>
+          <textarea id="ipm-note" placeholder="Optional note about this measurement"></textarea>
+          <div class="field-error" id="err-ipm-note"></div>
+        </div>
+      </div>
+      <div class="entry-actions">
+        <button type="submit" class="btn-submit-entry" id="btn-submit-ipm">✔ Save</button>
+        <button type="button" class="btn-edit-entry" id="btn-edit-ipm" style="display:none">✎ Edit</button>
+        <span class="entry-status" id="ipm-status"></span>
+      </div>
+    </form>
+
+    <!-- New form -->
+    <form id="form-new" novalidate style="display:none">
+      <div class="entry-session-hint" id="new-order-hint"></div>
+      <div class="entry-form-grid">
+        <div class="form-group">
+          <label for="new-number_alpl">ALPL <span class="req">*</span></label>
+          <input type="text" id="new-number_alpl" placeholder="e.g. 1028, 1029, 1030" />
+          <div class="field-error" id="err-new-number_alpl"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-part_number">Part Number <span class="req">*</span></label>
+          <input type="text" id="new-part_number" placeholder="e.g. ADI-9046-X" />
+          <div class="field-error" id="err-new-part_number"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-operator">Operator <span class="req">*</span></label>
+          <select id="new-operator">
+            <option value="">-- เลือก Operator --</option>
+          </select>
+          <div class="field-error" id="err-new-operator"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-handler">Handler <span class="req">*</span></label>
+          <select id="new-handler">
+            <option value="">-- เลือก Handler --</option>
+          </select>
+          <div class="field-error" id="err-new-handler"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-vendor">Vendor <span class="req">*</span></label>
+          <select id="new-vendor">
+            <option value="">-- เลือก Vendor --</option>
+          </select>
+          <div class="field-error" id="err-new-vendor"></div>
+        </div>
+        <div class="form-group span-2">
+          <label for="new-description">Description <span class="req">*</span></label>
+          <input type="text" id="new-description" />
+          <div class="field-error" id="err-new-description"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-po_number">PO Number <span class="req">*</span></label>
+          <input type="number" id="new-po_number" />
+          <div class="field-error" id="err-new-po_number"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-category">Category <span class="req">*</span></label>
+          <select id="new-category">
+            <option value="">-- เลือก Category --</option>
+          </select>
+          <div class="field-error" id="err-new-category"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-package_size">Package Size <span class="req">*</span></label>
+          <input type="text" id="new-package_size" list="package-size-datalist" placeholder="เลือก package size — จะ map nominal/tolerance/template ให้อัตโนมัติ" />
+          <div class="field-error" id="err-new-package_size"></div>
+        </div>
+        <div class="form-group">
+          <label for="new-owner">Owner <span class="req">*</span></label>
+          <select id="new-owner">
+            <option value="">-- เลือก Owner --</option>
+          </select>
+          <div class="field-error" id="err-new-owner"></div>
+        </div>
+        <div class="form-group span-2">
+          <label for="new-note">Note</label>
+          <textarea id="new-note" placeholder="Optional note about this part / batch"></textarea>
+          <div class="field-error" id="err-new-note"></div>
+        </div>
+      </div>
+      <div class="entry-actions">
+        <button type="submit" class="btn-submit-entry" id="btn-submit-new">✔ Save</button>
+        <button type="button" class="btn-edit-entry" id="btn-edit-new" style="display:none">✎ Edit</button>
+        <span class="entry-status" id="new-status"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:8000';
+
+  let session       = { state: 'idle', session_id: null, measured_count: 0, target_count: 1 };
+  let stationStatus = 'connecting';
+  let measurements  = [];
+  let parts         = [];
+  let sse           = null;
+  let ipmQueue      = null;
+  let newQueue      = null;
+  let lastTelemetry = null;
+  let lastImageMeasurementId = null;   // measurement_id ของรูปล่าสุดที่โชว์ใน Camera Preview
+
+  // ── Part Entry / Telemetry persistence ──────────────────────────────────
+  // ipmQueue/newQueue/lastTelemetry เดิมอยู่ใน memory ล้วนๆ พอเปลี่ยนหน้า (เช่น
+  // ไป edit.html แล้วกลับมา) หรือ refresh หน้า ค่าพวกนี้หายหมดเพราะ JS ตัวแปร
+  // reset ใหม่ทุกครั้ง ใช้ localStorage เก็บไว้กันหาย — บันทึกทุกครั้งที่มีการ
+  // เปลี่ยนคิว/telemetry แล้วโหลดกลับตอนเปิดหน้า (ก่อน initPartEntry/render ใดๆ)
+  const PART_ENTRY_STORAGE_KEY = 'tmx_part_entry_state_v1';
+
+  function savePartEntryState() {
+    try {
+      localStorage.setItem(PART_ENTRY_STORAGE_KEY, JSON.stringify({ ipmQueue, newQueue, lastTelemetry, lastImageMeasurementId }));
+    } catch (e) { /* localStorage อาจใช้ไม่ได้ (private mode ฯลฯ) — ไม่ critical ปล่อยผ่าน */ }
+  }
+
+  function loadPartEntryState() {
+    try {
+      const raw = localStorage.getItem(PART_ENTRY_STORAGE_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      ipmQueue              = d.ipmQueue ?? null;
+      newQueue              = d.newQueue ?? null;
+      lastTelemetry         = d.lastTelemetry ?? null;
+      lastImageMeasurementId = d.lastImageMeasurementId ?? null;
+    } catch (e) { console.warn('loadPartEntryState:', e); }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadPartEntryState();
+    if (lastTelemetry) updateTelemetry(lastTelemetry);
+    // เก็บแค่ measurement_id ไว้ ไม่เก็บ URL ตรงๆ เพราะ presigned URL หมดอายุ
+    // ใน 1 ชม. — โหลดหน้าใหม่ทีไรขอ URL สดใหม่เสมอแทน
+    if (lastImageMeasurementId) updateCameraPreview(lastImageMeasurementId);
+    Promise.all([loadSessionState(), loadMeasurements(), loadParts(), loadDropdownData()])
+      .then(() => connectSSE());
+    initPartEntry();
+  });
+
+  // ── Dropdown data (Operator/Owner/Vendor/Handler/Category/Package Size) ──
+  // dropdown ทุกตัวเป็นแบบปิด — โหลดจาก DB ครั้งเดียวตอนเปิดหน้า แล้วเติมลง
+  // <select>/<datalist> ที่เกี่ยวข้อง ไม่มีช่องให้พิมพ์ค่าใหม่ในฟอร์ม
+  async function loadDropdownData() {
+    const fillSelect = (ids, items, labelKey) => {
+      const optionsHtml = items.map(it => `<option value="${it[labelKey]}">${it[labelKey]}</option>`).join('');
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.insertAdjacentHTML('beforeend', optionsHtml);
+      });
+    };
+    try {
+      const [operators, owners, vendors, handlers, categories, packageSizes] = await Promise.all([
+        fetch(`${API}/api/operators`).then(r => r.ok ? r.json() : []),
+        fetch(`${API}/api/owners`).then(r => r.ok ? r.json() : []),
+        fetch(`${API}/api/vendors`).then(r => r.ok ? r.json() : []),
+        fetch(`${API}/api/handlers`).then(r => r.ok ? r.json() : []),
+        fetch(`${API}/api/categories`).then(r => r.ok ? r.json() : []),
+        fetch(`${API}/api/package-sizes`).then(r => r.ok ? r.json() : []),
+      ]);
+      fillSelect(['ipm-operator', 'new-operator'], operators, 'operator_name');
+      fillSelect(['new-owner'],    owners,     'owner_name');
+      fillSelect(['new-vendor'],   vendors,    'vendor_name');
+      fillSelect(['new-handler'],  handlers,   'handler_name');
+      fillSelect(['new-category'], categories, 'category_name');
+
+      const datalist = document.getElementById('package-size-datalist');
+      if (datalist) {
+        datalist.innerHTML = packageSizes.map(ps => `<option value="${ps.package_size}"></option>`).join('');
+      }
+    } catch (e) { console.warn('loadDropdownData:', e); }
+  }
+
+  // ── Confirm modal (Promise-based) — ใช้แทน confirm() ตรงๆ เพราะต้องรอ
+  // ผู้ใช้ตอบก่อนค่อยดำเนินการต่อแบบ async (เช่น ลงทะเบียน part ใหม่ระหว่างทาง)
+  function showConfirmModal(message) {
+    return new Promise(resolve => {
+      document.getElementById('confirm-modal-message').textContent = message;
+      const modal    = document.getElementById('confirm-modal');
+      const okBtn     = document.getElementById('confirm-modal-ok');
+      const cancelBtn = document.getElementById('confirm-modal-cancel');
+      modal.classList.add('open');
+      function cleanup(result) {
+        modal.classList.remove('open');
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        resolve(result);
+      }
+      okBtn.onclick     = () => cleanup(true);
+      cancelBtn.onclick = () => cleanup(false);
+    });
+  }
+
+  async function loadSessionState() {
+    try {
+      const r = await fetch(`${API}/api/session/state`);
+      if (r.ok) updateSession(await r.json());
+    } catch (e) { console.warn('loadSessionState:', e); }
+  }
+
+  function updateSession(data) {
+    session = { ...session, ...data };
+    renderSessionUI();
+    if (typeof measurements !== 'undefined') updateStats();
+  }
+
+  function renderSessionUI() {
+    const { state, measured_count: mc = 0, target_count: tc = 1 } = session;
+
+    const badge = document.getElementById('sess-state-badge');
+    badge.textContent = state.toUpperCase();
+    badge.className   = `session-state-badge ${state}`;
+
+    const telemetrySessionText = document.getElementById('telemetry-session-text');
+    if (telemetrySessionText) {
+      telemetrySessionText.textContent =
+        (state === 'idle' || !session.session_id)
+          ? '— / — measured'
+          : `${mc} / ${tc} measured`;
+    }
+
+    const hasQueue = !!(ipmQueue || newQueue);
+    const canStart = state !== 'running' && stationStatus === 'online' && hasQueue;
+    const btnStart = document.getElementById('btn-start');
+    btnStart.disabled = !canStart;
+    if (ipmQueue)      btnStart.textContent = `▶ Start (IPM ×${ipmQueue.list.length})`;
+    else if (newQueue) btnStart.textContent = `▶ Start (New ×${newQueue.list.length})`;
+    else               btnStart.textContent = '▶ Start (กด Save IPM/Part ก่อน)';
+    document.getElementById('btn-stop').style.display = state === 'running' ? 'inline-block' : 'none';
+  }
+
+  function setStationBadge(status) {
+    stationStatus = status;
+    const el  = document.getElementById('station-badge');
+    const map = { online: '🟢 Online', offline: '🔴 Offline', connecting: '🟡 Connecting' };
+    el.textContent = map[status] || status;
+    el.className   = `station-badge ${status}`;
+    renderSessionUI();
+  }
+
+  function connectSSE() {
+    if (sse) { sse.close(); sse = null; }
+    setStationBadge('connecting');
+    sse = new EventSource(`${API}/api/stream`);
+    sse.onopen  = () => setStationBadge('online');
+    sse.onerror = () => { setStationBadge('offline'); setTimeout(connectSSE, 3000); };
+
+    sse.addEventListener('measurement',      e => onNewMeasurement(parse(e)));
+    sse.addEventListener('image_updated',    e => onImageUpdated(parse(e)));
+    sse.addEventListener('session_started',  e => onSessionStarted(parse(e)));
+    sse.addEventListener('session_stopped',  e => onSessionStopped(parse(e)));
+    sse.addEventListener('session_complete', e => onSessionComplete(parse(e)));
+    sse.addEventListener('session_timeout',  e => onSessionTimeout(parse(e)));
+    sse.addEventListener('station_online',   e => onStationOnline(parse(e)));
+    sse.addEventListener('ping', () => {});
+  }
+
+  function parse(e) {
+    try { return JSON.parse(e.data); } catch { return {}; }
+  }
+
+  function onNewMeasurement(d) {
+    measurements.unshift({
+      measurement_id: d.measurement_id,
+      session_id:     d.session_id,
+      number_alpl:    d.number_alpl,
+      value_x:        d.value_x,
+      value_y:        d.value_y,
+      result:         d.result,
+      image_path:     null,
+      timestamp:      new Date().toISOString(),
+    });
+    updateSession({ measured_count: d.measured, target_count: d.target });
+    renderTable(d.measurement_id);
+    updateStats();
+    updateTelemetry(d);
+  }
+
+  function updateTelemetry(d) {
+    document.getElementById('telemetry-alpl-badge').textContent = `ALPL ${d.number_alpl ?? '—'}`;
+    document.getElementById('telemetry-x').innerHTML = `${d.value_x.toFixed(3)}<span> mm</span>`;
+    document.getElementById('telemetry-y').innerHTML = `${d.value_y.toFixed(3)}<span> mm</span>`;
+    const resultEl = document.getElementById('telemetry-result-value');
+    const colEl    = document.getElementById('telemetry-result-col');
+    const cls      = d.result === 'OK' ? 'ok' : 'ng';
+    resultEl.textContent = d.result;
+    resultEl.className   = `telemetry-result-value ${cls}`;
+    colEl.className      = `telemetry-result-col ${cls}`;
+    lastTelemetry = d;
+    savePartEntryState();
+  }
+
+  function resetTelemetry() {
+    document.getElementById('telemetry-alpl-badge').textContent = 'ALPL —';
+    document.getElementById('telemetry-x').innerHTML = '—<span> mm</span>';
+    document.getElementById('telemetry-y').innerHTML = '—<span> mm</span>';
+    document.getElementById('telemetry-result-value').textContent = '—';
+    document.getElementById('telemetry-result-value').className   = 'telemetry-result-value';
+    document.getElementById('telemetry-result-col').className     = 'telemetry-result-col';
+    lastTelemetry = null;
+    resetCameraPreview();
+    savePartEntryState();
+  }
+
+  // ── [แก้ไข] เคลียร์คิวและฟอร์มทั้งหมด เรียกตอน session จบ ─────────────────
+  function clearAllQueuesAndForms() {
+    ipmQueue = null;
+    newQueue = null;
+    savePartEntryState();
+    clearFormCompletely('ipm');
+    clearFormCompletely('new');
+    // รีเซ็ต toggle ให้ไม่มีโหมดไหน active (กลับสู่ placeholder)
+    document.getElementById('entry-mode-ipm').classList.remove('active');
+    document.getElementById('entry-mode-new').classList.remove('active');
+    document.getElementById('entry-placeholder').style.display = '';
+    document.getElementById('form-ipm').style.display = 'none';
+    document.getElementById('form-new').style.display = 'none';
+    renderSessionUI();
+    renderPartEntrySummary();
+  }
+
+  function onImageUpdated(d) {
+    const m = measurements.find(m => m.measurement_id === d.measurement_id);
+    if (m) {
+      m.image_path = d.image_path;
+      const row = document.querySelector(`tr[data-id="${d.measurement_id}"]`);
+      if (row) {
+        row.querySelector('.img-cell').innerHTML = imgBtn(d.measurement_id);
+      }
+    }
+    // รูปที่เพิ่งอัปโหลดเสร็จ (จาก Agent) ถือว่าเป็นรูปล่าสุด — เอาไปโชว์ที่
+    // Camera Preview เลย ไม่ต้องรอผู้ใช้กดอะไร (เป็น "live" ตามที่ขอ)
+    updateCameraPreview(d.measurement_id);
+  }
+
+  async function updateCameraPreview(measurementId) {
+    try {
+      const r = await fetch(`${API}/api/image-url/${measurementId}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      document.getElementById('camera-preview-box').innerHTML =
+        `<img src="${data.url}" alt="Latest capture (measurement #${measurementId})" />`;
+      lastImageMeasurementId = measurementId;
+      savePartEntryState();
+    } catch (e) { console.warn('updateCameraPreview:', e); }
+  }
+
+  function resetCameraPreview() {
+    document.getElementById('camera-preview-box').innerHTML =
+      '<span class="camera-preview-icon">🖼</span><span>No image yet</span>';
+    lastImageMeasurementId = null;
+  }
+
+  function onSessionStarted(d) {
+    resetTelemetry();
+    updateSession({ state: 'running', session_id: d.session_id, measured_count: 0, target_count: d.target_count });
+    renderPartEntrySummary(); // ซ่อนปุ่ม Edit ทันทีที่ session เริ่มรัน
+  }
+
+  // ── [แก้ไข] 3 handler นี้เรียก clearAllQueuesAndForms() เพื่อเคลียร์คิว+ฟอร์ม ─
+  function onSessionStopped(d)  { resetTelemetry(); updateSession({ state: 'stopped' }); clearAllQueuesAndForms(); }
+  function onSessionComplete(d) { resetTelemetry(); updateSession({ state: 'stopped', measured_count: d.measured, target_count: d.target }); clearAllQueuesAndForms(); }
+  function onSessionTimeout(d)  { resetTelemetry(); updateSession({ state: 'timeout' }); clearAllQueuesAndForms(); }
+  function onStationOnline(d)   { resetTelemetry(); setStationBadge('online'); updateSession({ state: 'idle' }); }
+
+  document.getElementById('btn-start').onclick = () => {
+    if (ipmQueue || newQueue) startFromQueue();
+  };
+
+  async function startFromQueue() {
+    const isIpm = !!ipmQueue;
+    const queue = isIpm ? ipmQueue : newQueue;
+    const list  = queue.list;
+    const label = isIpm ? 'IPM' : 'New';
+
+    if (!confirm(`เริ่ม session ด้วยคิว ${label} จำนวน ${list.length} ALPL (${list.join(', ')}) ใช่ไหม?`)) return;
+
+    const numberAlplStrList = list.map(n => String(n));
+
+    const body = isIpm
+      ? {
+          'จำนวนชิ้นงานที่ต้องวัด': list.length,
+          Measure_Type: 'IPM',
+          number_alpl:  numberAlplStrList,
+          Operator:     queue.operator,
+          Note:         queue.note ?? null,
+        }
+      : {
+          'จำนวนชิ้นงานที่ต้องวัด': list.length,
+          Measure_Type: 'New',
+          number_alpl:  numberAlplStrList,
+          Operator:       queue.operator,
+          Note:           queue.note ?? null,
+          part_number:    queue.fields.part_number,
+          handler:        queue.fields.handler,
+          description:    queue.fields.description,
+          vendor:         queue.fields.vendor,
+          po_number:      queue.fields.po_number,
+          category:       queue.fields.category,
+          package_size:   queue.fields.package_size,
+          owner:          queue.fields.owner,
+        };
+
+    console.log('[Start จาก Part Entry queue — payload]', body);
+
+    try {
+      const r = await fetch(`${API}/api/session/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Start failed');
+
+      updateSession({ state: 'running', session_id: data.session_id, measured_count: 0, target_count: data.target_count });
+      // คิวยังคงค้างไว้ระหว่างวัด (ไม่เคลียร์ตรงนี้แล้ว)
+      // จะเคลียร์เมื่อ session จบเท่านั้น (ผ่าน clearAllQueuesAndForms)
+      renderPartEntrySummary();
+    } catch (e) { alert(`Error: ${e.message}`); }
+  }
+
+  document.getElementById('btn-stop').onclick = async () => {
+    if (!confirm('Stop the current session?')) return;
+    try {
+      await fetch(`${API}/api/session/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: session.session_id }),
+      });
+    } catch (e) { alert(`Error: ${e.message}`); }
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Part Entry
+  // ══════════════════════════════════════════════════════════════════════════
+
+  function initPartEntry() {
+    const btnIpm = document.getElementById('entry-mode-ipm');
+    const btnNew = document.getElementById('entry-mode-new');
+    const formIpm = document.getElementById('form-ipm');
+    const formNew = document.getElementById('form-new');
+    const placeholder = document.getElementById('entry-placeholder');
+
+    btnIpm.onclick = () => {
+      if (btnIpm.classList.contains('active')) return;
+      if (formHasData('new') && !confirmDiscard('IPM', 'New')) return;
+      clearFormCompletely('new');
+      switchEntryMode('ipm');
+    };
+    btnNew.onclick = () => {
+      if (btnNew.classList.contains('active')) return;
+      if (formHasData('ipm') && !confirmDiscard('New', 'IPM')) return;
+      clearFormCompletely('ipm');
+      switchEntryMode('new');
+    };
+
+    function switchEntryMode(target) {
+      const isIpm = target === 'ipm';
+      btnIpm.classList.toggle('active', isIpm);  btnIpm.setAttribute('aria-selected', String(isIpm));
+      btnNew.classList.toggle('active', !isIpm); btnNew.setAttribute('aria-selected', String(!isIpm));
+      placeholder.style.display = 'none';
+      formIpm.style.display = isIpm ? '' : 'none';
+      formNew.style.display = isIpm ? 'none' : '';
+    }
+
+    renderIpmOrderHint();
+    formIpm.addEventListener('submit', onSubmitIpm);
+    formNew.addEventListener('submit', onSubmitNew);
+    document.getElementById('ipm-number_alpl').addEventListener('blur', updateIpmPackageSizeLock);
+    document.getElementById('btn-edit-ipm').onclick = () => unlockFormFields('ipm');
+    document.getElementById('btn-edit-new').onclick = () => unlockFormFields('new');
+
+    const peModal = document.getElementById('pe-modal');
+    document.getElementById('pe-modal-close').onclick = closePeModal;
+    peModal.onclick = e => { if (e.target.id === 'pe-modal') closePeModal(); };
+
+    renderPartEntrySummary();
+  }
+
+  function openPeModal() {
+    if (ipmQueue) {
+      document.getElementById('entry-mode-ipm').click();
+    } else if (newQueue) {
+      document.getElementById('entry-mode-new').click();
+    }
+    document.getElementById('pe-modal').classList.add('open');
+  }
+  function closePeModal() {
+    document.getElementById('pe-modal').classList.remove('open');
+  }
+
+  // ── [แก้ไข] renderPartEntrySummary — ไม่มี history dropdown แล้ว
+  //    โชว์ dropdown summary ถ้ามีคิว (ทั้งก่อนและระหว่างวัด)
+  //    โชว์ empty state + New Entry เมื่อไม่มีคิว (หลัง session จบ)
+  function renderPartEntrySummary() {
+    const el = document.getElementById('part-entry-summary');
+    const badgeLg = document.getElementById('pe-mode-badge-lg');
+    const queue = ipmQueue || newQueue;
+
+    if (!queue) {
+      // ไม่มีคิว → empty state เสมอ (ไม่ว่าจะมี measurement หรือไม่)
+      badgeLg.style.display = 'none';
+      el.innerHTML = `
+        <div class="pe-empty">
+          ยังไม่มีข้อมูล Part Entry ค้างอยู่ — กด "New Entry" เพื่อเตรียมคิว IPM หรือลงทะเบียน Part ใหม่
+        </div>
+        <div style="margin-top:1rem; text-align:center">
+          <button class="btn-pe-action" id="btn-pe-open">+ New Entry</button>
+        </div>`;
+      document.getElementById('btn-pe-open').onclick = openPeModal;
+      return;
+    }
+
+    // มีคิวค้างอยู่ → แสดง collapsible dropdown (ทั้งก่อน Start และระหว่างวัด)
+    const isIpm = !!ipmQueue;
+    badgeLg.style.display = '';
+    badgeLg.textContent   = isIpm ? 'IPM' : 'New';
+    badgeLg.className     = `pe-mode-badge-lg ${isIpm ? 'ipm' : 'new'}`;
+
+    const baseRows = isIpm
+      ? [
+          ['Number ALPL',  queue.list.join(', ')],
+          ['Operator',     queue.operator],
+          ['Note',         queue.note || '—'],
+        ]
+      : [
+          ['Number ALPL',      queue.list.join(', ')],
+          ['Operator',          queue.operator],
+          ['Note',              queue.note || '—'],
+          null,
+          ['Part Number',       queue.fields.part_number],
+          ['Handler',           queue.fields.handler        || '—'],
+          ['Description',       queue.fields.description    || '—'],
+          ['Vendor',            queue.fields.vendor         || '—'],
+          null,
+          ['Purchase Order No', queue.fields.po_number      != null ? queue.fields.po_number            : '—'],
+          ['Category',          queue.fields.category       || '—'],
+          ['Package Size',      queue.fields.package_size   || '—'],
+          ['Owner',             queue.fields.owner          || '—'],
+        ];
+
+    const gridRows = baseRows.map(row => {
+      if (row === null) return `<hr class="pg-divider">`;
+      return `<span class="pg-label">${row[0]}</span><span class="pg-value">${row[1]}</span>`;
+    }).join('');
+
+    // Toggle bar โชว์แค่ ALPL (ทั้ง IPM และ New)
+    const summaryText = `ALPL: ${queue.list.join(', ')}`;
+
+    // ปุ่ม Edit หายไปทันทีที่ session เริ่มรัน (state === 'running') — กันแก้ไข
+    // คิวระหว่างที่ Agent กำลังวัดตามคิวเดิมอยู่ ซึ่งจะทำให้ตำแหน่ง/ข้อมูลไม่ตรงกัน
+    const canEdit = session.state !== 'running';
+    el.innerHTML = `
+      <div class="pe-summary-dropdown">
+        <button class="pe-summary-toggle" id="pe-toggle-btn" type="button">
+          <span class="pe-summary-toggle-left">
+            <span>${summaryText}</span>
+          </span>
+          <span class="pe-summary-arrow" id="pe-arrow">▼</span>
+        </button>
+        <div class="pe-summary-body" id="pe-summary-body">
+          <div class="pe-summary-grid">${gridRows}</div>
+          <div class="pe-summary-actions">
+            ${canEdit ? '<button class="btn-pe-action" id="btn-pe-open">✎ Edit</button>' : ''}
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('pe-toggle-btn').onclick = () => {
+      const body  = document.getElementById('pe-summary-body');
+      const arrow = document.getElementById('pe-arrow');
+      const isOpen = body.classList.toggle('open');
+      arrow.classList.toggle('open', isOpen);
+    };
+
+    const btnPeOpen = document.getElementById('btn-pe-open');
+    if (btnPeOpen) btnPeOpen.onclick = openPeModal;
+  }
+
+  function otherPrefix(prefix) { return prefix === 'ipm' ? 'new' : 'ipm'; }
+
+  function formHasData(prefix) {
+    const form = document.getElementById(`form-${prefix}`);
+    return Array.from(form.querySelectorAll('input, textarea')).some(el => el.value.trim() !== '');
+  }
+
+  function confirmDiscard(targetLabel, currentLabel) {
+    return confirm(`หากกด ${targetLabel} ข้อมูลที่กรอกไว้ในฟอร์ม ${currentLabel} จะหายไป ดำเนินการต่อหรือไม่?`);
+  }
+
+  function clearFormCompletely(prefix) {
+    const form = document.getElementById(`form-${prefix}`);
+    form.reset();
+    clearFieldErrors(prefix);
+    unlockFormFields(prefix);
+    const statusEl = document.getElementById(`${prefix}-status`);
+    if (statusEl) statusEl.textContent = '';
+  }
+
+  function lockFormFields(prefix) {
+    const form = document.getElementById(`form-${prefix}`);
+    form.querySelectorAll('input, textarea').forEach(el => { el.disabled = true; });
+    document.getElementById(`btn-submit-${prefix}`).style.display = 'none';
+    document.getElementById(`btn-edit-${prefix}`).style.display = '';
+    const otherBtn = document.getElementById(`entry-mode-${otherPrefix(prefix)}`);
+    otherBtn.disabled = true;
+    otherBtn.title = `กด Edit ในฟอร์ม ${prefix.toUpperCase()} ก่อน ถ้าต้องการสลับโหมด`;
+  }
+
+  function unlockFormFields(prefix) {
+    const form = document.getElementById(`form-${prefix}`);
+    form.querySelectorAll('input, textarea').forEach(el => { el.disabled = false; });
+    document.getElementById(`btn-edit-${prefix}`).style.display = 'none';
+    document.getElementById(`btn-submit-${prefix}`).style.display = '';
+    const otherBtn = document.getElementById(`entry-mode-${otherPrefix(prefix)}`);
+    otherBtn.disabled = false;
+    otherBtn.title = '';
+  }
+
+  function renderIpmOrderHint() {
+      const msg = 'ℹ️ ลำดับ ALPL ที่กรอกจะถูกใช้ map กับค่าที่วัดได้ตามลำดับ ตอนกด Start ในรอบถัดไป';
+      ['ipm-order-hint', 'new-order-hint'].forEach(id => {
+        const hint = document.getElementById(id);
+        if (!hint) return;
+        hint.className = 'entry-session-hint';
+        hint.textContent = msg;
+      });
+  }
+
+  function clearFieldErrors(prefix) {
+    document.querySelectorAll(`[id^="err-${prefix}-"]`).forEach(el => el.textContent = '');
+    document.querySelectorAll(`#form-${prefix === 'ipm' ? 'ipm' : 'new'} input, #form-${prefix === 'ipm' ? 'ipm' : 'new'} textarea`)
+      .forEach(el => el.classList.remove('invalid'));
+  }
+
+  function setFieldError(prefix, field, message) {
+    const errEl = document.getElementById(`err-${prefix}-${field}`);
+    const inputEl = document.getElementById(`${prefix}-${field}`);
+    if (errEl) errEl.textContent = message;
+    if (inputEl) inputEl.classList.add('invalid');
+  }
+
+  function parseAlplList(raw) {
+    const tokens = raw.split(',').map(s => s.trim()).filter(s => s !== '');
+    if (tokens.length === 0) return { error: null };
+    const list = [];
+    const seen = new Set();
+    for (const token of tokens) {
+      const n = Number(token);
+      if (!Number.isInteger(n) || n <= 0) return { error: token };
+      if (!seen.has(n)) { seen.add(n); list.push(n); }
+    }
+    return { list };
+  }
+
+  async function refreshParts() {
+    try {
+      // /api/parts เปลี่ยนเป็น pagination แล้ว (คืน {items, total}, default limit=10)
+      // แต่หน้านี้ต้องใช้ parts "ทั้งหมด" เพื่อเช็คว่า ALPL ลงทะเบียนแล้วหรือยัง
+      // (checkAlplExistence) — ถ้าได้มาแค่ 10 ตัวแรกจะเช็คผิด จึงขอ limit สูงๆ
+      // เพื่อดึงมาทุกตัว แล้วอ่านจาก .items ตาม shape ใหม่
+      const r = await fetch(`${API}/api/parts?limit=100000`);
+      if (r.ok) { const d = await r.json(); parts = d.items ?? []; }
+    } catch (e) { console.warn('refreshParts:', e); }
+    return parts;
+  }
+
+  function checkAlplExistence(numberAlplList, mode) {
+    const registeredSet = new Set(parts.map(p => p.number_alpl));
+    if (mode === 'ipm') {
+      const notRegistered = numberAlplList.filter(n => !registeredSet.has(n));
+      if (notRegistered.length > 0) {
+        return `ALPL ${notRegistered.join(', ')} ยังไม่ได้ลงทะเบียนชิ้นงานนี้ — กรุณาไปลงทะเบียนที่แท็บ New ก่อน`;
+      }
+    } else {
+      const alreadyRegistered = numberAlplList.filter(n => registeredSet.has(n));
+      if (alreadyRegistered.length > 0) {
+        return `ALPL ${alreadyRegistered.join(', ')} ลงทะเบียนชิ้นงานนี้ไปแล้ว`;
+      }
+    }
+    return null;
+  }
+
+  // ── Package Size ของฟอร์ม IPM: ล็อก (พิมพ์ไม่ได้) ถ้า ALPL ที่กรอกทุกตัว
+  // ลงทะเบียนอยู่แล้ว เพราะไม่จำเป็นต้องใช้ (ไม่มี ALPL ไหนต้องลงทะเบียนใหม่) —
+  // เปิดให้กรอกได้ก็ต่อเมื่อมี ALPL อย่างน้อย 1 ตัวที่ยังไม่เคยลงทะเบียน
+  async function updateIpmPackageSizeLock() {
+    const raw = document.getElementById('ipm-number_alpl').value.trim();
+    const pkgInput = document.getElementById('ipm-package_size');
+    const { list, error } = parseAlplList(raw);
+    if (!list || list.length === 0 || error) {
+      // ยังกรอกไม่ครบ/รูปแบบไม่ถูกต้อง — เปิดให้กรอกไว้ก่อน (เดี๋ยว submit ค่อยเช็คซ้ำ)
+      pkgInput.disabled = false;
+      pkgInput.placeholder = 'ต้องกรอกถ้ามี ALPL ที่ยังไม่เคยลงทะเบียน';
+      return;
+    }
+    await refreshParts();
+    const registeredSet = new Set(parts.map(p => p.number_alpl));
+    const allRegistered = list.every(n => registeredSet.has(n));
+    pkgInput.disabled = allRegistered;
+    if (allRegistered) {
+      pkgInput.value = '';
+      pkgInput.placeholder = 'ไม่ต้องกรอก — ALPL ทุกตัวลงทะเบียนแล้ว';
+    } else {
+      pkgInput.placeholder = 'ต้องกรอกถ้ามี ALPL ที่ยังไม่เคยลงทะเบียน';
+    }
+  }
+
+  async function onSubmitIpm(ev) {
+    ev.preventDefault();
+    clearFieldErrors('ipm');
+
+    const numberAlplRaw = document.getElementById('ipm-number_alpl').value.trim();
+    const operator      = document.getElementById('ipm-operator').value.trim();
+    const packageSize   = document.getElementById('ipm-package_size').value.trim();
+    const note          = document.getElementById('ipm-note').value.trim();
+
+    const { list: numberAlplList, error: alplError } = parseAlplList(numberAlplRaw);
+
+    let hasError = false;
+    let unregistered = [];
+    if (alplError === null) {
+      setFieldError('ipm', 'number_alpl', 'กรอก ALPL อย่างน้อย 1 ค่า');
+      hasError = true;
+    } else if (alplError) {
+      setFieldError('ipm', 'number_alpl', `"${alplError}" ไม่ใช่เลข ALPL ที่ถูกต้อง (ต้องเป็นเลขจำนวนเต็มบวก)`);
+      hasError = true;
+    } else {
+      await refreshParts();
+      const registeredSet = new Set(parts.map(p => p.number_alpl));
+      unregistered = numberAlplList.filter(n => !registeredSet.has(n));
+    }
+    if (!operator) {
+      setFieldError('ipm', 'operator', 'กรอกชื่อ Operator');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    // ── ALPL ที่ยังไม่เคยลงทะเบียน — ต้องกรอก Package Size ก่อน แล้วถามยืนยัน
+    // ก่อนดำเนินการต่อ (แทนที่จะ block ทันทีแบบเดิม) พอกดยืนยันแล้ว จะลงทะเบียน
+    // part ใหม่แบบขั้นต่ำ (number_alpl + package_size) ก่อนเริ่มคิววัด
+    if (unregistered.length > 0) {
+      if (!packageSize) {
+        setFieldError(
+          'ipm', 'package_size',
+          `ต้องเลือก Package Size ก่อน — มี ALPL ที่ยังไม่เคยลงทะเบียน: ${unregistered.join(', ')}`,
+        );
+        return;
+      }
+      // ปิด Part Entry modal ก่อน ค่อยแสดง popup ยืนยัน (กันกรณี modal 2 ชั้นซ้อนกัน
+      // ทั้งคู่ใช้ class "modal-overlay" z-index เท่ากัน — ตัวที่อยู่หลังใน DOM
+      // จะทับตัวก่อนหน้า ถ้าเปิดพร้อมกันอาจบัง popup ยืนยันจนกดไม่ได้)
+      closePeModal();
+      const proceed = await showConfirmModal(
+        `ALPL ${unregistered.join(', ')} ยังไม่เคยบันทึกมาก่อน — ระบบจะลงทะเบียน Part ใหม่ด้วย ` +
+        `Package Size "${packageSize}" แล้วดำเนินการวัดต่อเลย คุณจะดำเนินการต่อหรือไม่?`,
+      );
+      if (!proceed) {
+        // ยกเลิก — เปิด Part Entry modal กลับมาให้แก้ไขต่อ (ฟอร์ม/ค่าที่กรอกไว้ยังอยู่)
+        document.getElementById('pe-modal').classList.add('open');
+        return;
+      }
+
+      for (const alpl of unregistered) {
+        try {
+          const r = await fetch(`${API}/api/parts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number_alpl: alpl, package_size: packageSize }),
+          });
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            throw new Error(d.detail || `ลงทะเบียน ALPL ${alpl} ไม่สำเร็จ`);
+          }
+        } catch (e) {
+          document.getElementById('pe-modal').classList.add('open'); // เปิดฟอร์มกลับมาให้เห็น error
+          setFieldError('ipm', 'package_size', e.message);
+          return;
+        }
+      }
+      await refreshParts(); // sync cache ในเครื่องหลังลงทะเบียน part ใหม่เสร็จ
+    }
+
+    newQueue = null;
+    ipmQueue = { list: numberAlplList, operator, note: note || null };
+    savePartEntryState();
+    renderSessionUI();
+    renderPartEntrySummary();
+    updateSession({ target_count: numberAlplList.length, measured_count: 0 });
+
+    const payload = {
+      number_alpl:  numberAlplList,
+      measure_type: 'IPM',
+      Operator:     operator,
+      note:         note || null,
+    };
+    console.log('[IPM submit — frontend only]', payload);
+    const statusEl = document.getElementById('ipm-status');
+    statusEl.className = 'entry-status success';
+    statusEl.textContent = `✔ บันทึกสำเร็จ ${numberAlplList.length} ALPL`;
+    lockFormFields('ipm');
+    closePeModal();
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  }
+
+  async function onSubmitNew(ev) {
+    ev.preventDefault();
+    clearFieldErrors('new');
+
+    const val = id => document.getElementById(`new-${id}`).value.trim();
+    const numberAlplRaw = val('number_alpl');
+    const partNumber    = val('part_number');
+    const operator      = val('operator');
+
+    const { list: numberAlplList, error: alplError } = parseAlplList(numberAlplRaw);
+    let alplHasError = false;
+    if (alplError === null) {
+      setFieldError('new', 'number_alpl', 'กรอก ALPL อย่างน้อย 1 ค่า');
+      alplHasError = true;
+    } else if (alplError) {
+      setFieldError('new', 'number_alpl', `"${alplError}" ไม่ใช่เลข ALPL ที่ถูกต้อง (ต้องเป็นเลขจำนวนเต็มบวก)`);
+      alplHasError = true;
+    } else {
+      await refreshParts();
+      const existenceError = checkAlplExistence(numberAlplList, 'new');
+      if (existenceError) {
+        setFieldError('new', 'number_alpl', existenceError);
+        alplHasError = true;
+      }
+    }
+
+    const numericFields = ['po_number'];
+
+    let hasError = alplHasError;
+    if (!partNumber) {
+      setFieldError('new', 'part_number', 'กรอก Part Number');
+      hasError = true;
+    }
+    if (!operator) {
+      setFieldError('new', 'operator', 'กรอกชื่อ Operator');
+      hasError = true;
+    }
+    if (!val('package_size')) {
+      // Package Size เป็นตัวกำหนด nominal/tolerance/template ทั้งหมดของ part
+      // นี้ (ผ่าน package_size lookup table) จึงบังคับกรอกเสมอตอนลงทะเบียน New
+      setFieldError('new', 'package_size', 'กรอก Package Size (จะ map nominal/tolerance/template ให้อัตโนมัติ)');
+      hasError = true;
+    }
+    // ทุก field ใน New บังคับกรอกหมด ยกเว้น Note (ตามที่ระบุไว้ — Note เป็น
+    // หมายเหตุอิสระ ไม่ใช่ข้อมูลของ part เอง จึงปล่อยว่างได้)
+    if (!val('handler')) { setFieldError('new', 'handler', 'เลือก Handler'); hasError = true; }
+    if (!val('vendor')) { setFieldError('new', 'vendor', 'เลือก Vendor'); hasError = true; }
+    if (!val('description')) { setFieldError('new', 'description', 'กรอก Description'); hasError = true; }
+    if (!val('category')) { setFieldError('new', 'category', 'เลือก Category'); hasError = true; }
+    if (!val('owner')) { setFieldError('new', 'owner', 'เลือก Owner'); hasError = true; }
+    numericFields.forEach(f => {
+      const raw = val(f);
+      if (raw === '') {
+        setFieldError('new', f, 'กรอก PO Number');
+        hasError = true;
+      } else if (isNaN(Number(raw))) {
+        setFieldError('new', f, 'ต้องเป็นตัวเลข');
+        hasError = true;
+      }
+    });
+    if (hasError) return;
+
+    const toNumOrNull = f => { const raw = val(f); return raw === '' ? null : Number(raw); };
+    const toStrOrNull = f => { const raw = val(f); return raw === '' ? null : raw; };
+
+    const payload = {
+      number_alpl:    numberAlplList,
+      part_number:    partNumber,
+      handler:        toStrOrNull('handler'),
+      description:    toStrOrNull('description'),
+      vendor:         toStrOrNull('vendor'),
+      po_number:      toNumOrNull('po_number'),
+      category:       toStrOrNull('category'),
+      package_size:   toStrOrNull('package_size'),
+      owner:          toStrOrNull('owner'),
+    };
+    const note = val('note') || null;
+    console.log('[New part submit — frontend only]', payload);
+
+    updateSession({ target_count: numberAlplList.length, measured_count: 0 });
+
+    ipmQueue = null;
+    newQueue = { list: numberAlplList, fields: payload, note, operator };
+    savePartEntryState();
+    renderSessionUI();
+    renderPartEntrySummary();
+
+    const statusEl = document.getElementById('new-status');
+    statusEl.className = 'entry-status success';
+    statusEl.textContent = `✔ บันทึกสำเร็จ ${numberAlplList.length} ALPL`;
+    lockFormFields('new');
+    closePeModal();
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  }
+
+  // ── Measurements ──────────────────────────────────────────────────────────
+  async function loadMeasurements() {
+    try {
+      // /api/measurements เปลี่ยน shape เป็น {items, total} แล้ว — ดึง 50 รายการ
+      // ล่าสุดมาแสดงบน dashboard (พอสำหรับ stats ของ session ปัจจุบัน) อ่านจาก .items
+      const r = await fetch(`${API}/api/measurements?limit=50`);
+      if (r.ok) { const d = await r.json(); measurements = d.items ?? []; }
+    } catch (e) { console.warn('loadMeasurements:', e); }
+    renderTable();
+    updateStats();
+  }
+
+  function imgBtn(id) {
+    return `<button class="img-btn-inner" onclick="showImage(${id})">🖼</button>`;
+  }
+
+  function renderTable(highlightId = null) {
+    const rows = measurements;
+    const tbody = document.getElementById('meas-body');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">No measurements</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(m => {
+      const ts  = m.timestamp ? new Date(m.timestamp).toLocaleString() : '—';
+      const res = m.result || '—';
+      const cls = res === 'OK' ? 'ok' : res === 'NG' ? 'ng' : '';
+      const hl  = m.measurement_id === highlightId ? 'highlight-new' : '';
+      return `<tr data-id="${m.measurement_id}" class="${hl}">
+        <td>${m.measurement_id}</td>
+        <td>${m.session_id ?? '—'}</td>
+        <td>${m.number_alpl}</td>
+        <td>${m.value_x != null ? m.value_x.toFixed(3) : '—'}</td>
+        <td>${m.value_y != null ? m.value_y.toFixed(3) : '—'}</td>
+        <td><span class="result-badge ${cls}">${res}</span></td>
+        <td class="img-cell">${m.image_path ? imgBtn(m.measurement_id) : '<span class="no-img">—</span>'}</td>
+        <td style="white-space:nowrap">${ts}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function updateStats() {
+    const currentSessionId = session.session_id;
+    const rows = currentSessionId == null
+      ? []
+      : measurements.filter(m => m.session_id === currentSessionId);
+    const ok = rows.filter(m => m.result === 'OK').length;
+    const ng = rows.filter(m => m.result === 'NG').length;
+    document.getElementById('stat-total').textContent = rows.length;
+    document.getElementById('stat-ok').textContent    = ok;
+    document.getElementById('stat-ng').textContent    = ng;
+  }
+
+  async function loadParts() {
+    try {
+      // เช่นเดียวกับ refreshParts — หน้านี้ต้องการ parts ทั้งหมด (ไม่ใช่ทีละหน้า)
+      // จึงขอ limit สูงๆ แล้วอ่านจาก .items ตาม shape ใหม่ {items, total}
+      const r = await fetch(`${API}/api/parts?limit=100000`);
+      if (r.ok) { const d = await r.json(); parts = d.items ?? []; }
+    } catch (e) { console.warn('loadParts:', e); }
+  }
+
+  async function showImage(measurementId) {
+    try {
+      const r = await fetch(`${API}/api/image-url/${measurementId}`);
+      if (!r.ok) throw new Error('Not found');
+      const data = await r.json();
+      document.getElementById('modal-img').src = data.url;
+      document.getElementById('modal').classList.add('open');
+    } catch (e) { alert('Image not available yet.'); }
+  }
+
+  document.getElementById('modal-close').onclick = closeModal;
+  document.getElementById('modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+    document.getElementById('modal-img').src = '';
+  }
+</script>
+</body>
+</html>

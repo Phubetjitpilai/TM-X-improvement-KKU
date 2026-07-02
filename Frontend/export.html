@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!-- Frontend/export.html — TM-X Data Export (single file, no frameworks)
+     เปิดตรงผ่าน browser: Frontend/export.html
+     ตอนนี้เป็นแค่โครงหน้า + topbar menu — เนื้อหา export จริงยังไม่ทำ (placeholder)
+     CSS variable + topbar ใช้ชุดเดียวกับ index.html / edit.html เพื่อให้เป็นระบบเดียวกัน -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TM-X Export</title>
+  <style>
+    /* ── Variables (ชุดเดียวกับ index.html / edit.html) ───────────────── */
+    :root {
+      --bg:        #f4f3ef;
+      --surface:   #ffffff;
+      --surface2:  #f7f6f3;
+      --border:    #e3e1da;
+      --accent:    #378ade;
+      --accent2:   #7f77dd;
+      --ok:        #3b6d11;
+      --ok-bg:     #eaf3de;
+      --ng:        #a32d2d;
+      --ng-bg:     #fcebeb;
+      --warn:      #854f0b;
+      --warn-bg:   #faeeda;
+      --text:      #1a1a18;
+      --muted:     #5f5e5a;
+      --radius:    8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    a { color: var(--accent); text-decoration: none; }
+
+    /* ── Top bar (เหมือน index.html / edit.html) ──────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      height: 52px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 1.5rem; }
+    .topbar-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      color: var(--text);
+    }
+    .topbar-title span { color: var(--accent); }
+    /* แถบเมนูนำทาง — "ข้อความล้วน" (ไม่ใช่ปุ่ม) สี --muted ปกติ เปลี่ยนเป็น
+       --accent ตอน hover พร้อม transition นุ่มๆ (.15s) ให้เหมือนกันทุกหน้า */
+    .topbar-nav { display: flex; align-items: center; gap: 1.25rem; }
+    .topbar-link {
+      font-size: 0.85rem;
+      font-weight: normal;
+      color: var(--muted);
+      transition: color .15s;
+    }
+    .topbar-link:hover { color: var(--accent); }
+
+    .main {
+      padding: 3rem 2rem;
+      display: flex;
+      justify-content: center;
+    }
+    .placeholder { color: var(--muted); font-size: 1rem; }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-title">TM-X <span>Export</span></div>
+    <nav class="topbar-nav">
+      <a class="topbar-link" href="index.html">Home</a>
+      <a class="topbar-link" href="edit.html">Edit</a>
+      <a class="topbar-link" href="export.html">Export</a>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+  <p class="placeholder">Export — Coming soon</p>
+</main>
+
+</body>
+</html>

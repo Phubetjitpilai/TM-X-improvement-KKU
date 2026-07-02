@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pymysql
+pydantic
+python-dotenv
+minio
+sse-starlette
+pandas
+httpx
