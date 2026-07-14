@@ -623,10 +623,11 @@ async def real_single_measurement(index: int):
 
 
 async def real_measurement_flow() -> None:
-    """Flow จริง: ต่อ TM-X → R0 (เข้าโหมดดำเนินงาน) → PW,1,<เลข template>
-    (โหลดโปรแกรมตาม template ที่ backend สั่งมา) → R0 ซ้ำอีกที (กันเครื่อง
-    สลับกลับโหมดตั้งค่าเองหลังโหลดโปรแกรมใหม่ — พบจากการทดสอบจริงว่า T1 error
-    03 ทุกรอบถ้าไม่ทำขั้นตอนนี้) → RM เช็คยืนยันโหมด (แค่ log ไม่ block) → วน
+    """Flow จริง: ต่อ TM-X → R0 (เข้าโหมดดำเนินงาน) → sleep 0.5s (ให้เครื่อง
+    สลับโหมดเสร็จก่อน — จุดที่เคยขาดไปเทียบกับ tcp.py ต้นฉบับที่ทดสอบผ่านแล้ว
+    ทำให้ T1 error 03 ทุกรอบเพราะยังไม่เข้า operation mode จริงตอนเริ่มวัด) →
+    PW,1,<เลข template> (โหลดโปรแกรมตาม template ที่ backend สั่งมา) → sleep
+    1.0s → RM เช็คยืนยันโหมด (แค่ log diagnostic ไม่ block) → วน
     real_single_measurement ทีละชิ้นตาม target_count (แต่ละชิ้นรอ input() แทน
     trigger จาก Micro ก่อน แล้วค่อยยิง T1+GM 5 รอบหาฐานนิยม) → S0 (กลับโหมด
     ตั้งค่า) → ปิด connection
@@ -657,6 +658,13 @@ async def real_measurement_flow() -> None:
         if _is_error_response(r0_resp):
             log.warning("Real flow: R0 ตอบ error/ไม่มีการตอบกลับ (%r) — ไปต่อ PW ทันที "
                         "(R0 error บางเคสไม่ fatal เช่นเข้าโหมด operation อยู่แล้ว)", r0_resp)
+        # เดิมตรงนี้ "ขาด" delay หลัง R0 ไป — tcp.py (ที่ทดสอบแล้วใช้ได้จริง)
+        # sleep 0.5s ตรงนี้เสมอ ก่อนจะส่ง PW ต่อ ถ้าไม่รอให้เครื่องสลับโหมด
+        # เสร็จก่อน PW จะยัง "สำเร็จ" อยู่ (เพราะ PW ใช้ได้ทั้ง 2 โหมด) แต่พอถึง
+        # T1 (ใช้ได้เฉพาะ operation mode) จะ error 03 ทุกรอบ — เพิ่งเจอจากการ
+        # เทียบกับ tcp.py ที่รันตรงๆ แล้วผ่าน ตัวนี้คือสาเหตุจริง ไม่ใช่เรื่อง
+        # เครื่องสลับโหมดกลับเองหลัง PW ตามที่เดาไว้ก่อนหน้า
+        await asyncio.sleep(0.5)
 
         pw_resp = await tmx_send_command(f"PW,1,{program_no}")
         log.info("Real flow: PW,1,%s -> %r", program_no, pw_resp)
@@ -664,17 +672,8 @@ async def real_measurement_flow() -> None:
             raise RuntimeError(f"โหลดโปรแกรม {program_no} ไม่สำเร็จ: {pw_resp}")
         await asyncio.sleep(1.0)  # รอโปรแกรม load เสร็จ (เท่ากับ tcp.py)
 
-        # เครื่องบางรุ่นสลับกลับเข้าโหมดตั้งค่า (setup mode) เองอัตโนมัติหลัง
-        # โหลดโปรแกรมใหม่ด้วย PW — ถ้าไม่ส่ง R0 ซ้ำอีกที T1 รอบแรกจะ error 03
-        # ("เมื่อมีการออกคำสั่งในโหมดตั้งค่า") ทุกรอบ ทั้งที่ R0 ตอนแรกผ่านแล้ว
-        # (พบจากการทดสอบจริง: T1 error 03 ทุกรอบหลัง PW สำเร็จ)
-        r0_resp2 = await tmx_send_command("R0")
-        log.info("Real flow: R0 (หลัง PW, กันสลับโหมดกลับ) -> %r", r0_resp2)
-        if _is_error_response(r0_resp2):
-            log.warning("Real flow: R0 รอบ 2 ก็ error/ไม่ตอบ (%r) — T1 รอบแรกอาจ error อีก", r0_resp2)
-
-        # RM: อ่านโหมดปัจจุบันจริงๆ มา log ไว้ยืนยัน (0=setup, 1=operation) —
-        # ไม่ block flow แม้ RM จะ error/ไม่ตอบ แค่ log ให้เห็นสถานะจริงก่อนวัด
+        # RM: อ่านโหมดปัจจุบันมา log ไว้เฉยๆ เป็น diagnostic (ไม่ block flow
+        # แม้ error/ไม่ตอบ) ยืนยันว่าตอนนี้อยู่ operation mode จริงก่อนเริ่มวัด
         rm_resp = await tmx_send_command("RM")
         log.info("Real flow: RM (เช็คโหมดปัจจุบัน) -> %r (คาดหวัง 'RM,1' = operation mode)", rm_resp)
         if rm_resp and "," in rm_resp:
