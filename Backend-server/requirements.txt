@@ -3,7 +3,7 @@ uvicorn
 pymysql
 pydantic
 python-dotenv
-minio
+python-multipart
 sse-starlette
 pandas
 httpx

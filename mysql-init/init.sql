@@ -14,7 +14,6 @@ DROP TABLE IF EXISTS operator;
 DROP TABLE IF EXISTS owner;
 DROP TABLE IF EXISTS vendor;
 DROP TABLE IF EXISTS handler;
-DROP TABLE IF EXISTS category;
 
 -- ===== Lookup tables (created first — parts/measurements reference these) =====
 
@@ -36,11 +35,6 @@ CREATE TABLE vendor (
 CREATE TABLE handler (
   handler_id   INT AUTO_INCREMENT PRIMARY KEY,
   handler_name VARCHAR(100) NOT NULL UNIQUE
-);
-
-CREATE TABLE category (
-  category_id   INT AUTO_INCREMENT PRIMARY KEY,
-  category_name VARCHAR(100) NOT NULL UNIQUE
 );
 
 -- package_size เก็บ nominal X/Y + tolerance เดียวที่ใช้ร่วมกันทั้งสองแกน
@@ -65,11 +59,10 @@ CREATE TABLE parts (
   description      TEXT,
   vendor_id        INT,
   po_number        BIGINT,
-  category_id      INT,
   package_size_id  INT,
   owner_id         INT,
+  recieve_date     DATETIME     DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (package_size_id) REFERENCES package_size(package_size_id),
-  FOREIGN KEY (category_id)     REFERENCES category(category_id),
   FOREIGN KEY (vendor_id)       REFERENCES vendor(vendor_id),
   FOREIGN KEY (handler_id)      REFERENCES handler(handler_id),
   FOREIGN KEY (owner_id)        REFERENCES owner(owner_id)

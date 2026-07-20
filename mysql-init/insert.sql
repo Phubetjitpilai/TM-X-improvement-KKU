@@ -30,10 +30,6 @@ INSERT IGNORE INTO vendor (vendor_name) VALUES
   ('B'),
   ('C');
 
--- ── Category ─────────────────────────────────────────────────────────────
-INSERT IGNORE INTO category (category_name) VALUES
-  ('ALPL'),
-  ('Lead breaker');
 
 -- ── Package Size ─────────────────────────────────────────────────────────
 -- upper_tol = 0.005 และ lower_tol = 0 ทุกตัวตามที่ระบุ, template_name = '201' ทุกตัว

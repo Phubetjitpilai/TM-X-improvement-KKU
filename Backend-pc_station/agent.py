@@ -1,531 +1,363 @@
-# Backend-pc_station/agent.py
-# How to run:
-#   cd Backend-pc_station
-#   pip install -r requirements.txt
-#   python agent.py
+"""
+Agent เวอร์ชันทดสอบ (minimal):
+  1. รับคำสั่ง Start + template จาก Backend ผ่าน POST /command
+  2. ต่อ TM-X → R0 → PW,1,<template>
+  3. รอพิมพ์เริ่มที่ terminal (แทน trigger จาก Micro) — ตรงจุดนี้เดียวกันคือจุด
+     ที่ "arm" FTP receiver ให้รับภาพจาก TM-X ได้ 1 ใบด้วย (ดู arm_image_capture)
+  4. ส่ง GM,0,0 จำนวน 5 รอบ (ดึงค่าที่เครื่องวัดอยู่ขณะนั้น ไม่ต้อง trigger)
+     → หาคู่ฐานนิยม → ได้ value_x, value_y
+  5. POST ค่าเข้า backend ที่ /api/measurements (format ตาม MeasurementCreate
+     ใน main.py: session_id, number_alpl, value_x, value_y, client_uuid)
+  6. ถ้าได้รูปจาก TM-X มาด้วย (ขั้นตอน 3) — อัปโหลดไฟล์จริงต่อให้ backend ผ่าน
+     POST /api/measurements/{id}/image-upload (multipart) backend จะเป็นคน
+     ตัดสินใจเก็บไฟล์ไว้ที่ ALPL/<package_size>/ เอง (ดู main.py)
 
-import asyncio
-import json
-import logging
+รับภาพจาก TM-X ยังไง (ใหม่): Agent รันเป็น FTP server ของตัวเอง (พอร์ตแยกจาก
+TCP ที่คุยกับ TM-X) ปกติจะ "ล็อก" ไม่ให้ใครอัปโหลดอะไรเข้ามาได้เลย จนกว่าจะ
+ถึง trigger ของแต่ละชิ้น ถึงจะปลดล็อกให้รับได้ 1 ใบ แล้วล็อกกลับทันที — กัน
+TM-X ส่งรูปผิดจังหวะ/ผิดชิ้นเข้ามาปนกัน (ดีไซน์เดียวกับที่เคยทำใน ftp.py
+เวอร์ชันทดสอบเดี่ยวๆ ก่อนหน้านี้ ยกเข้ามารวมในนี้)
+"""
 import os
-import random
+import socket
 import time
+import threading
 import uuid
-from typing import Optional
+from collections import Counter
 
 import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
+from pyftpdlib.authorizers import DummyAuthorizer
+from pyftpdlib.handlers import FTPHandler
+from pyftpdlib.servers import FTPServer
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-# ── Config ────────────────────────────────────────────────────────────────────
-BACKEND_URL    = os.getenv("BACKEND_URL",   "http://localhost:8000")
-AGENT_PORT     = int(os.getenv("AGENT_PORT",    9998))
-SERIAL_PORT    = os.getenv("SERIAL_PORT",   "COM3")
-SERIAL_BAUD    = int(os.getenv("SERIAL_BAUD",   9600))
-TMX_HOST       = os.getenv("TMX_HOST",      "127.0.0.1")
-TMX_PORT       = int(os.getenv("TMX_PORT",      5000))
+# การตั้งค่า IP และ Port ให้ตรงกับ TM-X (เหมือน tcp.py)
+TMX_IP = '192.168.10.11'
+TMX_PORT = 8600
+BUFFER_SIZE = 1024
+# BACKEND_URL: อ่านจาก .env แล้ว (เดิม hardcode "http://localhost:8000" ตรงๆ
+# ใช้ได้แค่ตอน Agent+Backend อยู่เครื่องเดียวกัน) — พอ Agent ย้ายมารันบน
+# Raspberry Pi แยกจากเครื่อง PC ที่รัน backend ต้องตั้งเป็น IP ของ PC ใน .env
+# แทน (ยังคง fallback เป็นค่าเดิมถ้าไม่ได้ตั้งไว้ ทดสอบเครื่องเดียวได้ปกติ)
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+TMX_ROUNDS = 5
+HB_INTERVAL = 5  # วินาที — ต้องน้อยกว่า HEARTBEAT_TIMEOUT ของ backend (15s) พอสมควร
+
+# ── รับภาพจาก TM-X ผ่าน FTP (ใหม่) ────────────────────────────────────────────
+# TEMP_IMAGE_DIR: โฟลเดอร์พักภาพชั่วคราวบนเครื่อง Agent (Pi) ก่อนอัปโหลดต่อให้
+# backend — ตัวแปรเดียวกับที่ระบุไว้ใน CLAUDE.md/.env อยู่แล้ว
 TEMP_IMAGE_DIR = os.getenv("TEMP_IMAGE_DIR", "./Store_image_temporary")
-HB_INTERVAL    = int(os.getenv("HEARTBEAT_INTERVAL", 5))
+# AGENT_FTP_PORT: ตั้งไว้ที่ 2121 ไม่ใช่ 21 (พอร์ตมาตรฐาน FTP) เป็นค่าเริ่มต้น
+# เพราะ Linux/Raspberry Pi ต้องรันเป็น root ถึงจะ bind พอร์ต < 1024 ได้ — ถ้า
+# TM-X Controller ตั้งค่าไปที่พอร์ต 21 ตรงๆ ไม่ได้ ค่อยตั้ง AGENT_FTP_PORT=21
+# ใน .env แล้วรัน agent.py ด้วย sudo แทน
+AGENT_FTP_HOST = os.getenv("AGENT_FTP_HOST", "0.0.0.0")
+AGENT_FTP_PORT = int(os.getenv("AGENT_FTP_PORT", 2121))
+AGENT_FTP_USER = os.getenv("AGENT_FTP_USER", "TMX")
+AGENT_FTP_PASS = os.getenv("AGENT_FTP_PASS", "tmx12345")
+# เวลารอรูปสูงสุดหลัง trigger ก่อนจะยอมแพ้แล้ววัดต่อโดยไม่มีรูป (วินาที)
+IMAGE_WAIT_TIMEOUT = float(os.getenv("AGENT_IMAGE_WAIT_TIMEOUT", 10))
 
-# Resolve path relative to project root
-_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if not os.path.isabs(TEMP_IMAGE_DIR):
-    TEMP_IMAGE_DIR = os.path.join(_root, TEMP_IMAGE_DIR.lstrip("./"))
+# session ที่กำลังวัดอยู่ตอนนี้ (None = idle) — heartbeat_loop อ่านตัวนี้ไปแนบ
+# กับทุก heartbeat เพื่อให้ backend อัปเดต sessions.last_seen ของ session
+# ที่ถูกต้อง ไม่งั้น heartbeat_checker ฝั่ง backend จะคิดว่า Agent ตาย (เงียบ
+# เกิน 15s) แล้ว mark session เป็น timeout → หน้าเว็บโดน resetTelemetry กลางคัน
+current_session_id = None
 
-#logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [Agent] %(levelname)s %(message)s")
-log = logging.getLogger(__name__)
+# สถานะ session ปัจจุบัน — /command action="stop" ตั้ง is_running=False แล้ว
+# measurement_flow เช็คก่อนวัดแต่ละชิ้นเพื่อหยุด loop ส่วน _tmx_sock เก็บ
+# socket ที่กำลังใช้อยู่ให้ stop handler ยิง S0 ไป TM-X ได้ทันที
+is_running = False
+_tmx_sock = None
 
-# ── Agent state (in-memory) ───────────────────────────────────────────────────
-current_session_id:    Optional[int] = None
-current_template_name: Optional[str] = None
-current_target_count:  Optional[int] = None
-current_number_alpl:   Optional[int] = None
-is_running:            bool           = False
-_state_lock       = asyncio.Lock()
-_pending_uploads: list = []
-_seen_images:  set = set()
-_object_queue: asyncio.Queue = asyncio.Queue()
-
-# ── TCP connection to TM-X ────────────────────────────────────────────────────
-# หมายเหตุ: ฟังก์ชัน TCP/Serial ทั้งหมดด้านล่างนี้ (_ensure_tcp, tcp_write,
-# tcp_readline, _init_serial, send_serial) ยังเก็บไว้เหมือนเดิมทุกอย่าง
-# เผื่อย้อนกลับไปต่อ TM-X/MCU จริงในอนาคต — แต่ตอนนี้ "ไม่ได้ถูกเรียกใช้แล้ว"
-# จาก flow หลัก (ดู start_flow ด้านล่างที่เปลี่ยนไปใช้ mock_measurement_flow
-# แทน) เพราะตอนนี้ยังไม่มี TM-X/MCU จริงให้ต่อ
-_tcp_reader: Optional[asyncio.StreamReader] = None
-_tcp_writer: Optional[asyncio.StreamWriter] = None
-_tcp_write_lock = asyncio.Lock()
+http_app = FastAPI()
 
 
-async def _ensure_tcp() -> None:
-    global _tcp_reader, _tcp_writer
-    if _tcp_writer is None or _tcp_writer.is_closing():
-        try:
-            _tcp_reader, _tcp_writer = await asyncio.open_connection(TMX_HOST, TMX_PORT)
-            log.info("TCP: Connected to TM-X at %s:%d", TMX_HOST, TMX_PORT)
-        except OSError as exc:
-            log.error("TCP connection failed: %s", exc)
-            raise
+# ══════════════════════════════════════════════════════════════════════════
+# FTP: รับภาพจาก TM-X ได้ "1 ใบต่อ 1 trigger" เท่านั้น
+# ══════════════════════════════════════════════════════════════════════════
+# ปกติ user FTP (AGENT_FTP_USER) มีแค่สิทธิ์อ่าน/list (_FTP_LOCKED_PERM) —
+# อัปโหลดอะไรเข้ามาไม่ได้เลย โดน 550 Permission denied ตั้งแต่ระดับโปรโตคอล
+# จนกว่า arm_image_capture() จะถูกเรียก (ตอน trigger ของแต่ละชิ้น — ดู
+# measurement_flow) ซึ่งจะเปิดสิทธิ์เขียนให้ชั่วคราว พอรับไฟล์ครบ 1 ใบ
+# (on_file_received) จะล็อกสิทธิ์กลับทันที กัน TM-X ส่งรูปถัดไปเข้ามาซ้อน
+os.makedirs(TEMP_IMAGE_DIR, exist_ok=True)
+
+_FTP_LOCKED_PERM = "elr"
+_FTP_ARMED_PERM = "elradfmw"
+
+_ftp_authorizer = DummyAuthorizer()
+_ftp_authorizer.add_user(AGENT_FTP_USER, AGENT_FTP_PASS, TEMP_IMAGE_DIR, perm=_FTP_LOCKED_PERM)
+
+_image_received_event = threading.Event()
+_last_received_image_path = None
 
 
-async def tcp_write(cmd: str) -> None:
-    async with _tcp_write_lock:
-        await _ensure_tcp()
-        _tcp_writer.write((cmd + "\n").encode())
-        await _tcp_writer.drain()
-    log.info("TCP >>>: %r", cmd)
+class SingleShotImageHandler(FTPHandler):
+    def on_file_received(self, file):
+        global _last_received_image_path
+        self.authorizer.override_user(self.username, perm=_FTP_LOCKED_PERM)
+        _last_received_image_path = file
+        _image_received_event.set()
+        print(f"📷 รับรูปจาก TM-X แล้ว: {file}")
 
 
-async def tcp_readline() -> str:
-    line = await _tcp_reader.readline()
-    data = line.decode().strip()
-    log.info("TCP <<<: %r", data)
-    return data
+def _run_ftp_server():
+    """รันใน daemon thread แยก — pyftpdlib เป็น synchronous/blocking (serve_forever)"""
+    handler = SingleShotImageHandler
+    handler.authorizer = _ftp_authorizer
+    handler.passive_ports = range(60000, 60100)
+    server = FTPServer((AGENT_FTP_HOST, AGENT_FTP_PORT), handler)
+    print(f"FTP: กำลังรอรับรูปจาก TM-X ที่ {AGENT_FTP_HOST}:{AGENT_FTP_PORT} (เก็บที่ {TEMP_IMAGE_DIR})")
+    server.serve_forever()
 
 
-# ── Serial port ───────────────────────────────────────────────────────────────
-_serial_conn = None
-
-
-def _init_serial() -> None:
-    global _serial_conn
-    try:
-        import serial
-        _serial_conn = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
-        log.info("Serial: Connected to %s at %d baud", SERIAL_PORT, SERIAL_BAUD)
-    except Exception as exc:
-        log.warning("Serial: Cannot open %s: %s — running without serial", SERIAL_PORT, exc)
-
-
-def send_serial(cmd: str) -> None:
-    if _serial_conn and _serial_conn.is_open:
-        _serial_conn.write((cmd + "\n").encode())
-        log.info("Serial >>>: %r", cmd)
-    else:
-        log.info("Serial (mock) >>>: %r", cmd)
-
-
-# ── Read new image from Store_image_temporary ─────────────────────────────────
-def _get_new_image_sync() -> Optional[str]:
-    """Poll Store_image_temporary for a new image file (not yet seen this session)."""
-    if not os.path.isdir(TEMP_IMAGE_DIR):
-        log.error("Image directory not found: %s", TEMP_IMAGE_DIR)
+def arm_image_capture(timeout=IMAGE_WAIT_TIMEOUT):
+    """เปิดรับรูปจาก TM-X ได้ 1 ใบ (ปลดล็อกสิทธิ์เขียนชั่วคราว) แล้ว block รอ
+    จนกว่าจะได้ไฟล์จริง หรือหมดเวลา — คืน path ของไฟล์ที่ได้ หรือ None ถ้าไม่มี
+    รูปเข้ามาในเวลาที่กำหนด (ไม่ทำให้การวัดค่า X/Y ล้มเหลวไปด้วยถ้ารูปมีปัญหา
+    — แค่ log เตือนแล้ววัดต่อตามปกติโดยไม่มีรูปติดไปกับชิ้นนี้)
+    """
+    global _last_received_image_path
+    _last_received_image_path = None
+    _image_received_event.clear()
+    _ftp_authorizer.override_user(AGENT_FTP_USER, perm=_FTP_ARMED_PERM)
+    print(f"🔓 พร้อมรับรูปจาก TM-X แล้ว (รอสูงสุด {timeout:.0f} วิ)...")
+    got = _image_received_event.wait(timeout=timeout)
+    if not got:
+        _ftp_authorizer.override_user(AGENT_FTP_USER, perm=_FTP_LOCKED_PERM)
+        print(f"⚠️ ไม่ได้รับรูปจาก TM-X ภายใน {timeout:.0f} วิ — ข้ามรูปของชิ้นนี้ไป")
         return None
-
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        files = [
-            f for f in os.listdir(TEMP_IMAGE_DIR)
-            if f.lower().endswith(".jpg") and f not in _seen_images
-        ]
-        if files:
-            newest = sorted(files)[-1]
-            _seen_images.add(newest)
-            full_path = os.path.join(TEMP_IMAGE_DIR, newest)
-            log.info("Image found: %s", full_path)
-            return full_path
-        time.sleep(0.5)
-
-    log.warning("No new image found in %s within 30 s", TEMP_IMAGE_DIR)
-    return None
+    return _last_received_image_path
 
 
-async def get_new_image() -> Optional[str]:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _get_new_image_sync)
-
-
-# ── Pydantic validation for measurement values ────────────────────────────────
-class MeasurementData(BaseModel):
-    value_x: float
-    value_y: float
-
-    @validator("value_x", "value_y")
-    def must_be_positive(cls, v):
-        if v <= 0:
-            raise ValueError("Measurement value must be > 0")
-        return v
-
-
-# ── Image upload to MinIO with retry ─────────────────────────────────────────
-async def upload_image(image_path: str, measurement_id: int) -> None:
-    filename = os.path.basename(image_path)
-    for attempt in range(1, 4):
-        try:
-            async with httpx.AsyncClient() as client:
-                # 1) Get presigned PUT URL
-                r = await client.post(
-                    f"{BACKEND_URL}/api/upload-url",
-                    json={"filename": filename, "measurement_id": measurement_id},
-                    timeout=10,
-                )
-                r.raise_for_status()
-                data = r.json()
-                presigned_url = data["presigned_url"]
-                object_key    = data["object_key"]
-
-                # 2) PUT image bytes directly to MinIO
-                with open(image_path, "rb") as fh:
-                    image_bytes = fh.read()
-                put_r = await client.put(presigned_url, content=image_bytes, timeout=30)
-                put_r.raise_for_status()
-
-                # 3) Update image_path in backend
-                await client.patch(
-                    f"{BACKEND_URL}/api/measurements/{measurement_id}/image",
-                    json={"image_path": object_key},
-                    timeout=10,
-                )
-
-            log.info("Image uploaded: %s (measurement #%d)", object_key, measurement_id)
-            return
-        except Exception as exc:
-            log.warning("Upload attempt %d/3 failed: %s", attempt, exc)
-            await asyncio.sleep(2)
-
-    log.error("Image upload failed after 3 attempts: %s", image_path)
-
-    # แจ้ง backend ว่ารูปของ measurement นี้อัปโหลดไม่สำเร็จ (ล้มเหลวครบ 3 ครั้ง)
-    # เดิมพอ retry ครบแล้วแค่ log.error ในเครื่อง Agent เฉยๆ — measurement จะมี
-    # image_path เป็น NULL ตลอดไปโดยไม่มีใครใน backend/web รู้เรื่องเลยว่าเกิด
-    # อะไรขึ้น (แยกไม่ออกจากกรณี "ยังไม่มีรูปเพราะเป็น manual add") ตอนนี้ยิง
-    # PATCH บอก backend ตรงๆ ว่า upload_failed=True เพื่อให้ web ขึ้น badge เตือน
-    # ในตาราง (ดู main.py update_image + index.html imgCell)
+def upload_image_to_backend(measurement_id, image_path):
+    """ส่งไฟล์รูปจริง (multipart) ให้ backend เก็บลง ALPL/<package_size>/ —
+    ดู POST /api/measurements/{id}/image-upload ใน main.py ลบไฟล์ temp ทิ้ง
+    เสมอไม่ว่าอัปโหลดจะสำเร็จหรือไม่ กัน Store_image_temporary เต็มดิสก์เรื่อยๆ
+    """
     try:
-        async with httpx.AsyncClient() as client:
-            await client.patch(
-                f"{BACKEND_URL}/api/measurements/{measurement_id}/image",
-                json={"image_path": None, "upload_failed": True},
-                timeout=10,
+        with open(image_path, "rb") as f:
+            resp = httpx.post(
+                f"{BACKEND_URL}/api/measurements/{measurement_id}/image-upload",
+                files={"file": (os.path.basename(image_path), f, "image/jpeg")},
+                timeout=30,
             )
+        if resp.status_code == 200:
+            print(f"🖼 อัปโหลดรูปให้ Backend สำเร็จ (measurement_id={measurement_id})")
+        else:
+            print(f"⚠️ อัปโหลดรูปไม่สำเร็จ (HTTP {resp.status_code}): {resp.text}")
     except Exception as exc:
-        log.error(
-            "แจ้ง backend ว่า image upload failed ก็ยังไม่สำเร็จอีก (measurement #%d): %s",
-            measurement_id, exc,
-        )
-
-
-# ── Cleanup Store_image_temporary ────────────────────────────────────────────
-def _cleanup_temp_images() -> None:
-    global _seen_images
-    if not os.path.isdir(TEMP_IMAGE_DIR):
-        log.error("Cleanup: directory not found: %s", TEMP_IMAGE_DIR)
-        return
-    removed = 0
-    for f in os.listdir(TEMP_IMAGE_DIR):
-        path = os.path.join(TEMP_IMAGE_DIR, f)
-        if os.path.isfile(path):
-            try:
-                os.remove(path)
-                removed += 1
-            except Exception as exc:
-                log.warning("Cleanup: could not remove %s: %s", f, exc)
-    _seen_images = set()
-    log.info("Cleanup: removed %d file(s) from %s", removed, TEMP_IMAGE_DIR)
-
-
-# ── Mock measurement: gen ค่า value_x/value_y แบบสุ่ม แทนการรอ TM-X จริง ──────
-def _generate_mock_measurement() -> "MeasurementData":
-    """สุ่มค่า value_x/value_y แบบมั่วๆ ไว้ใช้ทดสอบ flow ทั้งระบบโดยไม่ต้องมี
-    TM-X/MCU จริงต่ออยู่ — สุ่มในช่วงที่กว้างพอจะได้เห็นทั้งผล OK และ NG
-    คละกันบ้าง (ไม่ได้ดูค่า tolerance จริงของ part เลย เพราะ Agent ไม่รู้
-    และไม่จำเป็นต้องรู้ — backend เป็นคนตัดสิน OK/NG เองอยู่แล้ว)
-    """
-    return MeasurementData(value_x=round(random.uniform(1.0, 20.0), 3),
-                            value_y=round(random.uniform(1.0, 20.0), 3))
-
-
-async def mock_single_measurement(index: int) -> bool:
-    """ทำ 1 รอบของการ "วัด" แบบ mock: gen ค่า → POST ไป backend (retry ได้ถึง
-    3 ครั้งถ้าเจอปัญหาเชื่อมต่อ/backend ล่มชั่วคราว) → หา/อัปโหลดรูป (เหมือน
-    flow เดิมทุกอย่าง ไม่แก้ส่วนนี้) — ไม่แตะ TCP/Serial เลย
-
-    คืนค่า True ถ้าบันทึกลง backend สำเร็จ, False ถ้าล้มเหลวจนต้องข้ามชิ้นนี้ไป
-    (mock_measurement_flow เอาไปนับว่าวัด "สำเร็จจริง" กี่ชิ้นจาก target_count —
-    ไม่ใช่แค่ "ลองแล้ว" กี่ชิ้น เพื่อไม่ให้ข้อความสรุปท้าย flow โกหกว่าครบ)
-    """
-    global current_session_id, current_number_alpl
-
-    m = _generate_mock_measurement()
-    log.info("Mock measurement #%d: gen ค่า x=%.3f, y=%.3f", index, m.value_x, m.value_y)
-
-    # หารูปคู่กับการวัดนี้ (เหมือนเดิม — รัน parallel กับการเตรียมค่า value
-    # ในระบบจริง แต่ตรงนี้ค่า value มาจาก mock ทันทีอยู่แล้ว เลย await
-    # get_new_image() ตรงๆ ได้เลย ไม่ต้อง gather กับ tcp_task แบบเดิม)
-    image_path = await get_new_image()
-
-    # client_uuid: สร้างครั้งเดียวต่อการวัดนี้ แล้วใช้ตัวเดิมซ้ำทุกครั้งที่ retry
-    # ด้านล่าง — เป็น idempotency key ให้ backend เช็คได้ว่าเป็น request เดิม
-    # ที่ retry มา ไม่ใช่การวัดครั้งใหม่ (กัน insert ซ้ำ/นับ measured_count ซ้ำ
-    # ถ้ารอบก่อน backend บันทึกสำเร็จไปแล้วจริงๆ แต่ response หลุดหายกลับมาไม่ถึง
-    # Agent — ดู main.py create_measurement ที่ dedup ด้วย client_uuid นี้อยู่แล้ว)
-    client_uuid = str(uuid.uuid4())
-    data = None
-    for attempt in range(1, 4):
+        print(f"⚠️ อัปโหลดรูปไม่สำเร็จ: {exc}")
+    finally:
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{BACKEND_URL}/api/measurements",
-                    json={
-                        "session_id":  current_session_id,
-                        "number_alpl": current_number_alpl,  # backend จะ override ด้วยค่าจากคิวเองอยู่แล้ว
-                        "value_x":     m.value_x,
-                        "value_y":     m.value_y,
-                        "client_uuid": client_uuid,
-                    },
-                    timeout=10,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            break
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status < 500:
-                # 4xx = backend ปฏิเสธ request นี้ตรงๆ (เช่น session ไม่ได้
-                # running แล้ว/timeout ไปแล้วจาก heartbeat_checker) — retry ซ้ำ
-                # ไปก็ไม่มีทางสำเร็จ ยกเลิกทันที ไม่ต้องเสียเวลาลองอีก
-                log.error("Mock measurement #%d: backend ปฏิเสธ (HTTP %d): %s", index, status, exc)
-                break
-            log.warning("Mock measurement #%d: POST attempt %d/3 failed (HTTP %d): %s",
-                        index, attempt, status, exc)
-        except Exception as exc:
-            log.warning("Mock measurement #%d: POST attempt %d/3 failed: %s", index, attempt, exc)
-        if attempt < 3:
-            await asyncio.sleep(2)
-
-    if data is None:
-        # แจ้งเตือนให้เห็นชัดๆ ที่ terminal ทันที (เหมือน print "✅ ได้รับคำสั่ง
-        # Start"/"✅ Done" ที่มีอยู่แล้ว) ไม่ใช่แค่ log เฉยๆ เพราะ operator ที่
-        # เฝ้าหน้าจออยู่ควรรู้ทันทีว่าชิ้นนี้ข้อมูลหาย ต้องไปจัดการเอง
-        print(f"❌ ชิ้นที่ {index}/{current_target_count}: บันทึกไม่สำเร็จ "
-              f"(x={m.value_x:.3f}, y={m.value_y:.3f}) — ข้ามไปชิ้นถัดไป")
-        log.error(
-            "Mock measurement #%d: POST /api/measurements ล้มเหลวหลังลองครบ 3 ครั้ง "
-            "(หรือถูกปฏิเสธ) — ค่า x=%.3f, y=%.3f ของชิ้นนี้ไม่ถูกบันทึก",
-            index, m.value_x, m.value_y,
-        )
-        return False
-
-    measurement_id = data["measurement_id"]
-    log.info(
-        "Mock measurement #%d: measurement_id=%d ALPL=%s result=%s measured=%d/%d status=%s",
-        index, measurement_id, data.get("number_alpl"), data["result"],
-        data["measured"], data["target"], data["status"],
-    )
-
-    if image_path:
-        task = asyncio.create_task(upload_image(image_path, measurement_id))
-        _pending_uploads.append(task)
-        task.add_done_callback(_pending_uploads.remove)
-
-    return True
+            os.remove(image_path)
+        except OSError:
+            pass
 
 
-async def mock_measurement_flow() -> None:
-    """แทนที่ flow เดิมทั้งหมด (LOAD_TEMPLATE ผ่าน TCP, รอ TEMPLATE_OK, ส่ง
-    START_CMD ผ่าน Serial, รอ OBJECT_READY จาก MCU ทีละครั้ง) ด้วย loop ที่
-    gen ค่า value_x/value_y มั่วๆ เอง แล้วยิงเข้า backend ตาม target_count
-    ครั้ง ไม่ต้องมี TM-X/MCU จริงต่ออยู่เลย
-
-    Print "ได้รับคำสั่ง Start" + template_name ก่อนเริ่ม แล้ว print "Done"
-    ตอนจบครบทุกตัวตามที่ตกลงกันไว้
+def send_command(sock, command):
+    """ส่งคำสั่งไปยัง TM-X และรอรับผลลัพธ์ตอบกลับ (ยกมาจาก tcp.py ตรงๆ)
+    ไม่ print คำสั่ง/response แต่ละตัวแล้ว — Ball ขอให้ log แสดงแค่ค่า
+    value_x/value_y สุดท้ายที่ถูกเลือกเท่านั้น
     """
-    global is_running
-
-    print(f"✅ ได้รับคำสั่ง Start — session_id={current_session_id}, template_name={current_template_name!r}")
-    log.info("Mock start: session=%s template=%r target_count=%s",
-              current_session_id, current_template_name, current_target_count)
-
-    # นับ "สำเร็จจริง" แยกจาก "ลองแล้วกี่รอบ" — ถ้าบางชิ้น POST ล้มเหลวถาวร
-    # (ดู mock_single_measurement) จะข้ามไปชิ้นถัดไปแทนที่จะหยุดทั้ง session
-    # แต่ต้องรู้ตัวเลขจริงตอนสรุปท้าย flow ไม่ใช่โกหกว่า "วัดครบ N ชิ้นแล้ว"
-    # ทั้งที่จริงมีบางชิ้นข้อมูลหายไป
-    succeeded = 0
-    target = current_target_count or 0
-    for i in range(1, target + 1):
-        if not is_running:
-            log.warning("Mock flow: ถูกสั่ง stop กลางทาง (รอบที่ %d/%d) — หยุดเลย", i, current_target_count)
-            return
-        if await mock_single_measurement(i):
-            succeeded += 1
-
-    async with _state_lock:
-        is_running = False
-
-    # รอ upload รูปที่ยังค้างอยู่ให้เสร็จก่อน cleanup (เหมือน flow จริงเดิม)
-    if _pending_uploads:
-        log.info("Waiting for %d upload(s) to finish before cleanup…", len(_pending_uploads))
-        await asyncio.gather(*_pending_uploads, return_exceptions=True)
-    _cleanup_temp_images()
-
-    if succeeded == target:
-        print(f"✅ Done — วัดครบ {target} ชิ้นแล้ว (session_id={current_session_id})")
-    else:
-        print(f"⚠️ Done — วัดสำเร็จ {succeeded}/{target} ชิ้น "
-              f"({target - succeeded} ชิ้นบันทึกไม่สำเร็จ ดู log ด้านบน) "
-              f"(session_id={current_session_id})")
-    log.info("Mock flow done: session=%s สำเร็จ %d/%d", current_session_id, succeeded, target)
+    cmd_to_send = command + '\r'  # ต้องต่อท้ายด้วยตัวคั่น CR (\r) เสมอ
+    sock.sendall(cmd_to_send.encode('ascii'))
+    time.sleep(0.1)  # หน่วงเวลาให้กล้องประมวลผลเล็กน้อย
+    response = sock.recv(BUFFER_SIZE).decode('ascii').strip()
+    return response
 
 
-# ── Object-ready consumer loop ────────────────────────────────────────────────
-# หมายเหตุ: loop นี้ (กับ serial_reader_loop ด้านล่าง) ยังรันอยู่เหมือนเดิม
-# แต่ตอนนี้ "ไม่มีอะไรมา put เข้า _object_queue แล้ว" เพราะ mock_measurement_flow
-# ไม่ได้รอสัญญาณจาก Serial อีกต่อไป — เก็บไว้เผื่อย้อนกลับไปใช้ของจริง
-async def object_ready_consumer() -> None:
-    """Single consumer — processes OBJECT_READY one at a time from the queue."""
-    log.info("Object-ready consumer started")
-    while True:
-        await _object_queue.get()
-        if not is_running or current_session_id is None:
-            log.warning("Consumer: dequeued signal but no active session — discarding")
-            _object_queue.task_done()
+def read_one_round(sock):
+    """1 รอบ: ส่ง GM,0,0 ดึงค่าที่เครื่องวัดอยู่ขณะนั้น → คืน (x_str, y_str)
+    ตัด +/- ทิ้ง, ข้าม placeholder 9999.999/9999.9999, เอา 2 ค่าสุดท้าย
+
+    หมายเหตุ: ไม่ส่ง T1 (trigger) แล้ว — เครื่อง TM-X ที่ใช้วัดค่าต่อเนื่อง
+    อยู่แล้ว (จากการทดสอบจริง T1 ตอบ ER,T1,03 ตลอดแต่ GM ยังได้ค่ากลับมา
+    ปกติ) GM อย่างเดียวจึงเพียงพอสำหรับดึงค่าปัจจุบัน
+    """
+    response_data = send_command(sock, "GM,0,0").split(',')
+
+    values = []
+    for i in response_data:
+        i = i.strip('-').strip('+')
+        if i in ("9999.999", "9999.9999"):
             continue
-        qsize = _object_queue.qsize()
-        if qsize:
-            log.debug("Consumer: queue has %d more signal(s) pending", qsize)
-        _object_queue.task_done()
+        values.append(i)
+
+    return values[-2], values[-1]
 
 
-# ── Start / Stop flows ────────────────────────────────────────────────────────
-async def start_flow() -> None:
-    """เดิมฟังก์ชันนี้คุยกับ TM-X จริงผ่าน TCP (LOAD_TEMPLATE) แล้วส่ง
-    START_CMD ผ่าน Serial ไปที่ MCU — ตอนนี้แทนที่ด้วย mock_measurement_flow()
-    ไปเลยตามที่ตกลงกันไว้ (ไม่ต้องมี TM-X/MCU จริงต่ออยู่) ฟังก์ชัน tcp_write/
-    tcp_readline/send_serial ด้านบนยังเก็บไว้เผื่อย้อนกลับมาใช้ทีหลัง
+def pick_mode_pair(pairs):
+    """หา "คู่" (x, y) ที่ปรากฏบ่อยที่สุดจากทั้ง 5 รอบ — นับเป็นคู่ไม่แยกแกน
+    เพื่อให้ x กับ y ที่เลือกมาจากรอบการวัดเดียวกันจริงๆ
     """
-    await mock_measurement_flow()
+    counts = Counter(pairs)
+    most_common_pair, _ = counts.most_common(1)[0]
+    return most_common_pair
 
 
-async def stop_flow() -> None:
-    global is_running
-    log.info("Stop flow: หยุด mock measurement flow")
-    async with _state_lock:
-        is_running = False
+def post_to_backend(session_id, number_alpl, value_x, value_y):
+    """POST ค่าเข้า backend — format ตรงตาม MeasurementCreate ใน main.py"""
+    resp = httpx.post(
+        f"{BACKEND_URL}/api/measurements",
+        json={
+            "session_id":  session_id,
+            "number_alpl": number_alpl,
+            "value_x":     value_x,
+            "value_y":     value_y,
+            "client_uuid": str(uuid.uuid4()),
+        },
+        timeout=10,
+    )
+    return resp
 
 
-# ── Serial reader loop ────────────────────────────────────────────────────────
-# หมายเหตุ: เก็บไว้เหมือนเดิม ไม่ได้ใช้งานจริงตอนนี้ (ไม่มี Serial connection
-# เพราะ _init_serial จะ warn แล้วไม่ตั้งค่า _serial_conn ถ้าไม่มีพอร์ตจริง)
-async def serial_reader_loop() -> None:
-    if _serial_conn is None:
-        log.info("Serial: reader loop disabled (no port)")
-        return
-
-    loop = asyncio.get_event_loop()
-    log.info("Serial: reader loop started")
+def heartbeat_loop():
+    """ยิง POST /api/heartbeat ทุก HB_INTERVAL วิ ตลอดเวลาที่ Agent รันอยู่
+    (แนบ session_id ปัจจุบันไปด้วยถ้ากำลังวัดอยู่ — backend ใช้ต่ออายุ
+    sessions.last_seen กัน heartbeat_checker mark session เป็น timeout)
+    รันใน daemon thread แยก จึงไม่กวน measurement_flow และตายไปพร้อม process
+    """
     while True:
         try:
-            raw = await loop.run_in_executor(None, _serial_conn.readline)
-            line = raw.decode("utf-8", errors="ignore").strip()
-            if not line:
-                continue
-            log.info("Serial <<<: %r", line)
-
-            if line == "OBJECT_READY":
-                await _object_queue.put("OBJECT_READY")
-                log.debug("Serial: queued OBJECT_READY (queue size=%d)", _object_queue.qsize())
-            elif line == "BUTTON_PRESSED:START":
-                if is_running and current_template_name:
-                    asyncio.create_task(start_flow())
-                else:
-                    log.info("Serial: START button — no active session, ignoring")
-            elif line == "BUTTON_PRESSED:STOP":
-                asyncio.create_task(stop_flow())
-            else:
-                log.debug("Serial: unrecognised message %r", line)
-        except Exception as exc:
-            log.error("Serial read error: %s", exc)
-            await asyncio.sleep(1)
+            httpx.post(
+                f"{BACKEND_URL}/api/heartbeat",
+                json={"session_id": current_session_id},
+                timeout=5,
+            )
+        except Exception:
+            pass  # backend ล่มชั่วคราวไม่เป็นไร รอบหน้าค่อยยิงใหม่
+        time.sleep(HB_INTERVAL)
 
 
-# ── Heartbeat loop ────────────────────────────────────────────────────────────
-async def heartbeat_loop() -> None:
-    while True:
-        await asyncio.sleep(HB_INTERVAL)
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f"{BACKEND_URL}/api/heartbeat",
-                    json={"session_id": current_session_id},
-                    timeout=5,
-                )
-            log.debug("Heartbeat sent (session=%s)", current_session_id)
-        except Exception as exc:
-            log.warning("Heartbeat error: %s", exc)
+def measurement_flow(session_id, template_name, number_alpl, target_count):
+    """Flow หลัก — รันใน thread แยกเพื่อไม่ block FastAPI server"""
+    global current_session_id, is_running, _tmx_sock
+    current_session_id = session_id  # heartbeat จะเริ่มแนบ session นี้ทันที
+    is_running = True
 
+    print(f"\n✅ ได้รับคำสั่ง Start — template={template_name!r}, จำนวน {target_count} ชิ้น")
 
-# ── FastAPI HTTP server (command endpoint) ────────────────────────────────────
-http_app = FastAPI(title="TM-X Agent")
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.settimeout(5.0)
+    client_socket.connect((TMX_IP, TMX_PORT))
+    _tmx_sock = client_socket  # ให้ stop handler ยิง S0 ผ่าน socket นี้ได้
+
+    # Reset (เข้าโหมดดำเนินงาน) — sleep 0.5 ตาม tcp.py ที่ทดสอบผ่านแล้ว
+    send_command(client_socket, "R0")
+    time.sleep(0.5)
+
+    # Load Program ตาม template ที่ backend ส่งมา (zero-pad เป็น 3 หลัก)
+    send_command(client_socket, f"PW,1,{str(template_name).zfill(3)}")
+    time.sleep(1.0)
+
+    for piece in range(1, (target_count or 1) + 1):
+        if not is_running:
+            print("⏹ ได้รับคำสั่ง Stop — หยุดการวัด")
+            break
+
+        # รอสัญญาณว่าชิ้นงานพร้อม (แทน trigger จาก Micro ด้วยการพิมพ์ไปก่อน)
+        input(f"\nชิ้นที่ {piece}/{target_count} — พิมพ์เริ่ม: ")
+
+        # เช็คอีกทีหลัง input — เผื่อ Stop มาถึงระหว่างที่กำลังรอพิมพ์อยู่
+        # (input() เป็น blocking interrupt กลางคันไม่ได้ ต้องรอกด Enter ก่อน
+        # ถึงจะเห็นว่าโดนสั่งหยุดไปแล้ว)
+        if not is_running:
+            print("⏹ ได้รับคำสั่ง Stop — หยุดการวัด")
+            break
+
+        # เปิดรับภาพจาก TM-X ได้ 1 ใบ ตรงจุด trigger นี้เดียวกัน (block รอจนกว่า
+        # จะได้ไฟล์ หรือหมดเวลา IMAGE_WAIT_TIMEOUT) — ทำก่อนอ่านค่า X/Y เพราะ
+        # TM-X มักถ่ายภาพพร้อม/ก่อนหน้าการวัดจริงในจังหวะ trigger เดียวกัน
+        image_path = arm_image_capture()
+
+        # GM 5 รอบ เก็บเป็น "คู่" (x, y) ของแต่ละรอบ — เว้นจังหวะระหว่างรอบ
+        # เล็กน้อย ไม่งั้นทั้ง 5 รอบอาจอ่านได้จาก measurement cycle เดียวกัน
+        # เป๊ะ (ค่าซ้ำกันหมดโดยไม่ได้วัดใหม่จริง) แล้วฐานนิยมจะไม่มีความหมาย
+        pairs = []
+        for _ in range(TMX_ROUNDS):
+            pairs.append(read_one_round(client_socket))
+            time.sleep(0.3)
+
+        # หาคู่ฐานนิยม → ตำแหน่ง 0 = value_x, ตำแหน่ง 1 = value_y
+        mode_pair = pick_mode_pair(pairs)
+        value_x = float(mode_pair[0])
+        value_y = float(mode_pair[1])
+
+        print(f"Value X : {value_x}")
+        print(f"Value Y : {value_y}")
+
+        resp = post_to_backend(session_id, number_alpl, value_x, value_y)
+        data = resp.json()
+        print(f"→ ส่งให้ Backend แล้ว (result={data.get('result')}, {data.get('measured')}/{data.get('target')})")
+
+        # มีรูปจากขั้นตอน trigger ด้านบน → อัปโหลดต่อให้ backend เก็บถาวร (ทำ
+        # หลัง POST ค่าวัดสำเร็จเท่านั้น เพราะต้องรู้ measurement_id ก่อน)
+        if image_path:
+            upload_image_to_backend(data["measurement_id"], image_path)
+
+        # backend ตอบ complete = วัดครบ session แล้ว หยุดเลย
+        if data.get("status") == "complete":
+            break
+
+    # จบการทำงาน — กลับโหมดตั้งค่า แล้วปิด connection (S0 ยิงซ้ำกับตอน stop
+    # handler ได้ไม่เป็นไร TM-X รับซ้ำได้)
+    try:
+        send_command(client_socket, "S0")
+        time.sleep(0.5)
+    except Exception:
+        pass  # socket อาจถูกปิดไปแล้วจาก stop handler
+    client_socket.close()
+    _tmx_sock = None
+    is_running = False
+    current_session_id = None  # heartbeat กลับไปยิงแบบ idle (ไม่แนบ session)
+    print("\n✅ จบ session — ปิดการเชื่อมต่อ TM-X แล้ว")
 
 
 class CommandRequest(BaseModel):
-    action:        str
-    session_id:    Optional[int] = None
-    template_name: Optional[str] = None
-    target_count:  Optional[int] = None
-    number_alpl:   Optional[int] = None
+    action: str
+    session_id: int | None = None
+    template_name: str | None = None
+    number_alpl: int | None = None
+    target_count: int | None = None
 
 
 @http_app.post("/command")
 async def command(req: CommandRequest):
-    global current_session_id, current_template_name, current_target_count
-    global current_number_alpl, is_running
-
-    log.info("Command received: %s", req.action)
-
+    global is_running
     if req.action == "start":
-        current_session_id    = req.session_id
-        current_template_name = req.template_name
-        current_target_count  = req.target_count
-        current_number_alpl   = req.number_alpl
-        is_running            = True
-        asyncio.create_task(start_flow())
-        return {"ok": True}
-
-    if req.action == "stop":
-        asyncio.create_task(stop_flow())
-        return {"ok": True}
-
-    return {"error": "Unknown action"}
-
-
-@http_app.post("/simulate/object-ready")
-async def simulate_object_ready():
-    """Simulate an OBJECT_READY signal from MCU — for testing without real hardware.
-
-    หมายเหตุ: endpoint นี้ไม่มีความหมายแล้วตอนนี้ เพราะ mock_measurement_flow
-    ไม่รอสัญญาณ OBJECT_READY อีกต่อไป (มันวน loop เองตาม target_count เลย) —
-    เก็บไว้เผื่อย้อนกลับไปใช้ของจริงในอนาคต
-    """
-    if not is_running or current_session_id is None:
-        log.warning("Simulate: rejected — no active session")
-        return {"error": "No active session"}
-    await _object_queue.put("OBJECT_READY")
-    qsize = _object_queue.qsize()
-    log.info("Simulate: queued OBJECT_READY (queue size=%d)", qsize)
-    return {"ok": True, "session_id": current_session_id, "queue_size": qsize}
-
-
-# ── Main: run everything concurrently ─────────────────────────────────────────
-async def main() -> None:
-    _cleanup_temp_images()
-    _init_serial()
-
-    server = uvicorn.Server(
-        uvicorn.Config(http_app, host="127.0.0.1", port=AGENT_PORT, log_level="info")
-    )
-
-    await asyncio.gather(
-        server.serve(),
-        heartbeat_loop(),
-        serial_reader_loop(),
-        object_ready_consumer(),
-    )
+        threading.Thread(
+            target=measurement_flow,
+            args=(req.session_id, req.template_name, req.number_alpl, req.target_count),
+            daemon=True,
+        ).start()
+    elif req.action == "stop":
+        print("\n⏹ ได้รับคำสั่ง Stop จาก Backend")
+        is_running = False  # loop ใน measurement_flow จะเห็นแล้วหยุดเอง
+        # ยิง S0 ไป TM-X ทันทีเลยถ้ายังต่ออยู่ — ไม่ต้องรอ loop วนมาเช็ค flag
+        # (ถ้ากำลังค้างรอ input() อยู่ จะหยุดสนิทตอนกด Enter ครั้งถัดไป)
+        if _tmx_sock is not None:
+            try:
+                send_command(_tmx_sock, "S0")
+                print("→ ส่ง S0 ไป TM-X แล้ว")
+            except Exception:
+                pass
+    return {"status": "ok", "action": req.action}
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # heartbeat รันตลอดอายุโปรแกรมใน daemon thread — เริ่มก่อนเปิด server
+    threading.Thread(target=heartbeat_loop, daemon=True).start()
+    # FTP server (รับภาพจาก TM-X) รันใน daemon thread แยกเหมือนกัน — เริ่มพร้อม
+    # โปรแกรม ไม่ต้องรอ Start session ก่อน (แต่ล็อกไม่ให้รับไฟล์อะไรจนกว่าจะ
+    # trigger จริง — ดู arm_image_capture)
+    threading.Thread(target=_run_ftp_server, daemon=True).start()
+    # port ต้องตรงกับ AGENT_PORT ใน main.py ของ backend (default 9998)
+    print("Agent (minimal) กำลังรอคำสั่ง Start จาก Backend ที่ port 9998...")
+    uvicorn.run(http_app, host="0.0.0.0", port=9998)

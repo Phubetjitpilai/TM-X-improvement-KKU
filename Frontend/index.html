@@ -434,6 +434,7 @@
     }
     .pe-mode-badge-lg.ipm { background: rgba(55,138,222,.12); color: var(--accent); }
     .pe-mode-badge-lg.new { background: rgba(127,119,221,.15); color: var(--accent2); }
+    .pe-mode-badge-lg.rework { background: var(--warn-bg); color: var(--warn); }
 
     .entry-toggle {
       display: inline-flex;
@@ -1011,9 +1012,10 @@
     <div class="entry-toggle" role="tablist" aria-label="Entry mode">
       <button class="entry-toggle-btn" id="entry-mode-ipm" data-mode="IPM" role="tab" aria-selected="false">IPM</button>
       <button class="entry-toggle-btn" id="entry-mode-new" data-mode="New" role="tab" aria-selected="false">New</button>
+      <button class="entry-toggle-btn" id="entry-mode-rework" data-mode="Rework" role="tab" aria-selected="false">Rework</button>
     </div>
 
-    <div class="entry-placeholder" id="entry-placeholder">กรุณาเลือกโหมด IPM หรือ New ก่อนกรอกข้อมูล</div>
+    <div class="entry-placeholder" id="entry-placeholder">กรุณาเลือกโหมด IPM, New หรือ Rework ก่อนกรอกข้อมูล</div>
 
     <!-- Shared datalist: Package Size (ดึงจาก /api/package-sizes) -->
     <datalist id="package-size-datalist"></datalist>
@@ -1038,11 +1040,6 @@
           <label for="ipm-package_size">Package Size</label>
           <input type="text" id="ipm-package_size" list="package-size-datalist" placeholder="ต้องกรอกถ้ามี ALPL ที่ยังไม่เคยลงทะเบียน" />
           <div class="field-error" id="err-ipm-package_size"></div>
-        </div>
-        <div class="form-group span-2">
-          <label for="ipm-note">Note</label>
-          <textarea id="ipm-note" placeholder="Optional note about this measurement"></textarea>
-          <div class="field-error" id="err-ipm-note"></div>
         </div>
       </div>
       <div class="entry-actions">
@@ -1094,15 +1091,8 @@
         </div>
         <div class="form-group">
           <label for="new-po_number">PO Number <span class="req">*</span></label>
-          <input type="number" id="new-po_number" />
+          <input type="text" inputmode="numeric" id="new-po_number" placeholder="ตัวเลขเท่านั้น" />
           <div class="field-error" id="err-new-po_number"></div>
-        </div>
-        <div class="form-group">
-          <label for="new-category">Category <span class="req">*</span></label>
-          <select id="new-category">
-            <option value="">-- เลือก Category --</option>
-          </select>
-          <div class="field-error" id="err-new-category"></div>
         </div>
         <div class="form-group">
           <label for="new-package_size">Package Size <span class="req">*</span></label>
@@ -1116,6 +1106,11 @@
           </select>
           <div class="field-error" id="err-new-owner"></div>
         </div>
+        <div class="form-group">
+          <label for="new-receive_date">Receive Date</label>
+          <input type="date" id="new-receive_date" />
+          <div class="field-error" id="err-new-receive_date"></div>
+        </div>
         <div class="form-group span-2">
           <label for="new-note">Note</label>
           <textarea id="new-note" placeholder="Optional note about this part / batch"></textarea>
@@ -1126,6 +1121,79 @@
         <button type="submit" class="btn-submit-entry" id="btn-submit-new">✔ Save</button>
         <button type="button" class="btn-edit-entry" id="btn-edit-new" style="display:none">✎ Edit</button>
         <span class="entry-status" id="new-status"></span>
+      </div>
+    </form>
+
+    <!-- Rework form — ALPL ที่เคยลงทะเบียนผ่าน New แล้ว แต่งานไม่ผ่าน ถูกส่งไป
+         Rework แล้วส่งกลับมาวัดใหม่ — auto-fill ข้อมูลเดิมทุกช่อง ยกเว้น Receive
+         Date ที่ต้องกรอกวันที่รับกลับมาใหม่เสมอ (ดู updateReworkPrefill) รองรับ
+         ทีละ 1 ALPL เท่านั้น เพราะแต่ละ ALPL มีข้อมูลเดิมของตัวเองไม่เหมือนกัน -->
+    <form id="form-rework" novalidate style="display:none">
+      <div class="entry-session-hint" id="rework-order-hint"></div>
+      <div class="entry-form-grid">
+        <div class="form-group">
+          <label for="rework-number_alpl">ALPL <span class="req">*</span></label>
+          <input type="text" id="rework-number_alpl" placeholder="ต้องเคยลงทะเบียนผ่าน New มาแล้ว" />
+          <div class="field-error" id="err-rework-number_alpl"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-operator">Operator <span class="req">*</span></label>
+          <select id="rework-operator">
+            <option value="">-- เลือก Operator --</option>
+          </select>
+          <div class="field-error" id="err-rework-operator"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-part_number">Part Number <span class="req">*</span></label>
+          <input type="text" id="rework-part_number" />
+          <div class="field-error" id="err-rework-part_number"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-handler">Handler <span class="req">*</span></label>
+          <select id="rework-handler">
+            <option value="">-- เลือก Handler --</option>
+          </select>
+          <div class="field-error" id="err-rework-handler"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-vendor">Vendor <span class="req">*</span></label>
+          <select id="rework-vendor">
+            <option value="">-- เลือก Vendor --</option>
+          </select>
+          <div class="field-error" id="err-rework-vendor"></div>
+        </div>
+        <div class="form-group span-2">
+          <label for="rework-description">Description <span class="req">*</span></label>
+          <input type="text" id="rework-description" />
+          <div class="field-error" id="err-rework-description"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-po_number">PO Number <span class="req">*</span></label>
+          <input type="text" inputmode="numeric" id="rework-po_number" placeholder="ตัวเลขเท่านั้น" />
+          <div class="field-error" id="err-rework-po_number"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-package_size">Package Size <span class="req">*</span></label>
+          <input type="text" id="rework-package_size" list="package-size-datalist" />
+          <div class="field-error" id="err-rework-package_size"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-owner">Owner <span class="req">*</span></label>
+          <select id="rework-owner">
+            <option value="">-- เลือก Owner --</option>
+          </select>
+          <div class="field-error" id="err-rework-owner"></div>
+        </div>
+        <div class="form-group">
+          <label for="rework-receive_date">Receive Date <span class="req">*</span></label>
+          <input type="date" id="rework-receive_date" />
+          <div class="field-error" id="err-rework-receive_date"></div>
+        </div>
+      </div>
+      <div class="entry-actions">
+        <button type="submit" class="btn-submit-entry" id="btn-submit-rework">✔ Save</button>
+        <button type="button" class="btn-edit-entry" id="btn-edit-rework" style="display:none">✎ Edit</button>
+        <span class="entry-status" id="rework-status"></span>
       </div>
     </form>
   </div>
@@ -1141,6 +1209,7 @@
   let sse           = null;
   let ipmQueue      = null;
   let newQueue      = null;
+  let reworkQueue   = null;
   let lastTelemetry = null;
   let lastImageMeasurementId = null;   // measurement_id ของรูปล่าสุดที่โชว์ใน Camera Preview
 
@@ -1160,7 +1229,7 @@
 
   function savePartEntryState() {
     try {
-      localStorage.setItem(PART_ENTRY_STORAGE_KEY, JSON.stringify({ ipmQueue, newQueue, lastTelemetry, lastImageMeasurementId }));
+      localStorage.setItem(PART_ENTRY_STORAGE_KEY, JSON.stringify({ ipmQueue, newQueue, reworkQueue, lastTelemetry, lastImageMeasurementId }));
     } catch (e) { /* localStorage อาจใช้ไม่ได้ (private mode ฯลฯ) — ไม่ critical ปล่อยผ่าน */ }
   }
 
@@ -1171,6 +1240,7 @@
       const d = JSON.parse(raw);
       ipmQueue              = d.ipmQueue ?? null;
       newQueue              = d.newQueue ?? null;
+      reworkQueue           = d.reworkQueue ?? null;
       lastTelemetry         = d.lastTelemetry ?? null;
       lastImageMeasurementId = d.lastImageMeasurementId ?? null;
     } catch (e) { console.warn('loadPartEntryState:', e); }
@@ -1239,7 +1309,7 @@
     };
   }
 
-  // ── Dropdown data (Operator/Owner/Vendor/Handler/Category/Package Size) ──
+  // ── Dropdown data (Operator/Owner/Vendor/Handler/Package Size) ──
   // dropdown ทุกตัวเป็นแบบปิด — โหลดจาก DB ครั้งเดียวตอนเปิดหน้า แล้วเติมลง
   // <select>/<datalist> ที่เกี่ยวข้อง ไม่มีช่องให้พิมพ์ค่าใหม่ในฟอร์ม
   async function loadDropdownData() {
@@ -1251,19 +1321,17 @@
       });
     };
     try {
-      const [operators, owners, vendors, handlers, categories, packageSizes] = await Promise.all([
+      const [operators, owners, vendors, handlers, packageSizes] = await Promise.all([
         fetch(`${API}/api/operators`).then(r => r.ok ? r.json() : []),
         fetch(`${API}/api/owners`).then(r => r.ok ? r.json() : []),
         fetch(`${API}/api/vendors`).then(r => r.ok ? r.json() : []),
         fetch(`${API}/api/handlers`).then(r => r.ok ? r.json() : []),
-        fetch(`${API}/api/categories`).then(r => r.ok ? r.json() : []),
         fetch(`${API}/api/package-sizes`).then(r => r.ok ? r.json() : []),
       ]);
-      fillSelect(['ipm-operator', 'new-operator'], operators, 'operator_name');
-      fillSelect(['new-owner'],    owners,     'owner_name');
-      fillSelect(['new-vendor'],   vendors,    'vendor_name');
-      fillSelect(['new-handler'],  handlers,   'handler_name');
-      fillSelect(['new-category'], categories, 'category_name');
+      fillSelect(['ipm-operator', 'new-operator', 'rework-operator'], operators, 'operator_name');
+      fillSelect(['new-owner',   'rework-owner'],   owners,   'owner_name');
+      fillSelect(['new-vendor',  'rework-vendor'],  vendors,  'vendor_name');
+      fillSelect(['new-handler', 'rework-handler'], handlers, 'handler_name');
 
       const datalist = document.getElementById('package-size-datalist');
       if (datalist) {
@@ -1312,7 +1380,7 @@
     // เช็คแบบ transition-only เลยจับไม่ได้ ต้องเทียบ session_id ตรงๆ แบบนี้ถึง
     // จะครอบคลุมทุกเคส — คิวที่ "ยังไม่เคย Start" (session_id เป็น null) จะไม่ถูก
     // เคลียร์ทิ้ง เพราะยังไม่ผูกกับ session ไหนเลย ต้องรอผู้ใช้กด Start เอง
-    const queue = ipmQueue || newQueue;
+    const queue = ipmQueue || newQueue || reworkQueue;
     const queueIsStale = queue && queue.session_id != null &&
       !(session.state === 'running' && session.session_id === queue.session_id);
 
@@ -1345,13 +1413,14 @@
           : `${mc} / ${tc} measured`;
     }
 
-    const hasQueue = !!(ipmQueue || newQueue);
+    const hasQueue = !!(ipmQueue || newQueue || reworkQueue);
     const canStart = state !== 'running' && stationStatus === 'online' && hasQueue;
     const btnStart = document.getElementById('btn-start');
     btnStart.disabled = !canStart;
-    if (ipmQueue)      btnStart.textContent = `▶ Start (IPM ×${ipmQueue.list.length})`;
-    else if (newQueue) btnStart.textContent = `▶ Start (New ×${newQueue.list.length})`;
-    else               btnStart.textContent = '▶ Start (กด Save IPM/Part ก่อน)';
+    if (ipmQueue)         btnStart.textContent = `▶ Start (IPM ×${ipmQueue.list.length})`;
+    else if (newQueue)    btnStart.textContent = `▶ Start (New ×${newQueue.list.length})`;
+    else if (reworkQueue) btnStart.textContent = `▶ Start (Rework ×${reworkQueue.list.length})`;
+    else                  btnStart.textContent = '▶ Start (กด Save IPM/New/Rework ก่อน)';
     document.getElementById('btn-stop').style.display = state === 'running' ? 'inline-block' : 'none';
   }
 
@@ -1437,15 +1506,19 @@
   function clearAllQueuesAndForms() {
     ipmQueue = null;
     newQueue = null;
+    reworkQueue = null;
     savePartEntryState();
     clearFormCompletely('ipm');
     clearFormCompletely('new');
+    clearFormCompletely('rework');
     // รีเซ็ต toggle ให้ไม่มีโหมดไหน active (กลับสู่ placeholder)
     document.getElementById('entry-mode-ipm').classList.remove('active');
     document.getElementById('entry-mode-new').classList.remove('active');
+    document.getElementById('entry-mode-rework').classList.remove('active');
     document.getElementById('entry-placeholder').style.display = '';
     document.getElementById('form-ipm').style.display = 'none';
     document.getElementById('form-new').style.display = 'none';
+    document.getElementById('form-rework').style.display = 'none';
     renderSessionUI();
     renderPartEntrySummary();
   }
@@ -1497,42 +1570,61 @@
   function onStationOnline(d)   { resetTelemetry(); setStationBadge('online'); updateSession({ state: 'idle' }); }
 
   document.getElementById('btn-start').onclick = () => {
-    if (ipmQueue || newQueue) startFromQueue();
+    if (ipmQueue || newQueue || reworkQueue) startFromQueue();
   };
 
   async function startFromQueue() {
-    const isIpm = !!ipmQueue;
-    const queue = isIpm ? ipmQueue : newQueue;
+    const mode  = ipmQueue ? 'ipm' : newQueue ? 'new' : 'rework';
+    const queue = ipmQueue || newQueue || reworkQueue;
     const list  = queue.list;
-    const label = isIpm ? 'IPM' : 'New';
+    const label = mode === 'ipm' ? 'IPM' : mode === 'new' ? 'New' : 'Rework';
 
     if (!confirm(`เริ่ม session ด้วยคิว ${label} จำนวน ${list.length} ALPL (${list.join(', ')}) ใช่ไหม?`)) return;
 
     const numberAlplStrList = list.map(n => String(n));
 
-    const body = isIpm
-      ? {
-          'จำนวนชิ้นงานที่ต้องวัด': list.length,
-          Measure_Type: 'IPM',
-          number_alpl:  numberAlplStrList,
-          Operator:     queue.operator,
-          Note:         queue.note ?? null,
-        }
-      : {
-          'จำนวนชิ้นงานที่ต้องวัด': list.length,
-          Measure_Type: 'New',
-          number_alpl:  numberAlplStrList,
-          Operator:       queue.operator,
-          Note:           queue.note ?? null,
-          part_number:    queue.fields.part_number,
-          handler:        queue.fields.handler,
-          description:    queue.fields.description,
-          vendor:         queue.fields.vendor,
-          po_number:      queue.fields.po_number,
-          category:       queue.fields.category,
-          package_size:   queue.fields.package_size,
-          owner:          queue.fields.owner,
-        };
+    let body;
+    if (mode === 'ipm') {
+      body = {
+        'จำนวนชิ้นงานที่ต้องวัด': list.length,
+        Measure_Type: 'IPM',
+        number_alpl:  numberAlplStrList,
+        Operator:     queue.operator,
+      };
+    } else if (mode === 'new') {
+      body = {
+        'จำนวนชิ้นงานที่ต้องวัด': list.length,
+        Measure_Type: 'New',
+        number_alpl:  numberAlplStrList,
+        Operator:       queue.operator,
+        Note:           queue.note ?? null,
+        part_number:    queue.fields.part_number,
+        handler:        queue.fields.handler,
+        description:    queue.fields.description,
+        vendor:         queue.fields.vendor,
+        po_number:      queue.fields.po_number,
+        package_size:   queue.fields.package_size,
+        owner:          queue.fields.owner,
+        recieve_date:   queue.fields.recieve_date,
+      };
+    } else {
+      // Rework: จำกัดทีละ 1 ALPL เสมอ (บังคับตอน onSubmitRework แล้ว) — ไม่มี
+      // Note เหมือน IPM/New เพราะฟอร์ม Rework ไม่มีช่อง Note (ตามที่ระบุไว้)
+      body = {
+        'จำนวนชิ้นงานที่ต้องวัด': list.length,
+        Measure_Type: 'Rework',
+        number_alpl:  numberAlplStrList,
+        Operator:       queue.operator,
+        part_number:    queue.fields.part_number,
+        handler:        queue.fields.handler,
+        description:    queue.fields.description,
+        vendor:         queue.fields.vendor,
+        po_number:      queue.fields.po_number,
+        package_size:   queue.fields.package_size,
+        owner:          queue.fields.owner,
+        recieve_date:   queue.fields.recieve_date,
+      };
+    }
 
     console.log('[Start จาก Part Entry queue — payload]', body);
 
@@ -1554,6 +1646,11 @@
       queue.session_id = data.session_id;
       savePartEntryState();
       updateSession({ state: 'running', session_id: data.session_id, measured_count: 0, target_count: data.target_count });
+      // Rework อัปเดต row ใน parts (เช่น recieve_date ใหม่) และ New insert
+      // part ตัวแรกของคิว ตอน start ฝั่ง backend — cache `parts` ในหน้านี้
+      // เลยเก่าทันทีหลัง start สำเร็จ refresh เลยตรงนี้ เพื่อให้ทุกจุดที่อ่าน
+      // จาก cache (report modal ฯลฯ) เห็นค่าล่าสุดโดยไม่ต้อง F5 ทั้งหน้า
+      refreshParts();
       // คิวยังคงค้างไว้ระหว่างวัด (ไม่เคลียร์ตรงนี้แล้ว)
       // จะเคลียร์เมื่อ session จบเท่านั้น (ผ่าน updateSession/clearAllQueuesAndForms)
     } catch (e) { alert(`Error: ${e.message}`); }
@@ -1574,41 +1671,58 @@
   // Part Entry
   // ══════════════════════════════════════════════════════════════════════════
 
+  // ── [แก้ไข] รองรับ 3 โหมด (IPM/New/Rework) แทนที่จะ hardcode แค่ 2 ทาง —
+  // modeBtns/modeForms/modeLabels คือ source of truth เดียวของรายชื่อโหมด
+  // ทั้งหมด ถ้าจะเพิ่มโหมดใหม่ในอนาคตแก้แค่ 3 object นี้พอ (บวกเพิ่ม
+  // form/button ใน HTML และ submit handler ของโหมดนั้นเอง)
+  const ENTRY_MODES = ['ipm', 'new', 'rework'];
+
   function initPartEntry() {
-    const btnIpm = document.getElementById('entry-mode-ipm');
-    const btnNew = document.getElementById('entry-mode-new');
-    const formIpm = document.getElementById('form-ipm');
-    const formNew = document.getElementById('form-new');
+    const modeBtns = {
+      ipm:    document.getElementById('entry-mode-ipm'),
+      new:    document.getElementById('entry-mode-new'),
+      rework: document.getElementById('entry-mode-rework'),
+    };
+    const modeForms = {
+      ipm:    document.getElementById('form-ipm'),
+      new:    document.getElementById('form-new'),
+      rework: document.getElementById('form-rework'),
+    };
+    const modeLabels = { ipm: 'IPM', new: 'New', rework: 'Rework' };
     const placeholder = document.getElementById('entry-placeholder');
 
-    btnIpm.onclick = () => {
-      if (btnIpm.classList.contains('active')) return;
-      if (formHasData('new') && !confirmDiscard('IPM', 'New')) return;
-      clearFormCompletely('new');
-      switchEntryMode('ipm');
-    };
-    btnNew.onclick = () => {
-      if (btnNew.classList.contains('active')) return;
-      if (formHasData('ipm') && !confirmDiscard('New', 'IPM')) return;
-      clearFormCompletely('ipm');
-      switchEntryMode('new');
-    };
-
     function switchEntryMode(target) {
-      const isIpm = target === 'ipm';
-      btnIpm.classList.toggle('active', isIpm);  btnIpm.setAttribute('aria-selected', String(isIpm));
-      btnNew.classList.toggle('active', !isIpm); btnNew.setAttribute('aria-selected', String(!isIpm));
+      ENTRY_MODES.forEach(mode => {
+        const isActive = mode === target;
+        modeBtns[mode].classList.toggle('active', isActive);
+        modeBtns[mode].setAttribute('aria-selected', String(isActive));
+        modeForms[mode].style.display = isActive ? '' : 'none';
+      });
       placeholder.style.display = 'none';
-      formIpm.style.display = isIpm ? '' : 'none';
-      formNew.style.display = isIpm ? 'none' : '';
     }
 
+    ENTRY_MODES.forEach(mode => {
+      modeBtns[mode].onclick = () => {
+        if (modeBtns[mode].classList.contains('active')) return;
+        // ถ้าโหมดอื่น (ที่ไม่ใช่ตัวที่กำลังจะสลับไป) มีข้อมูลค้างอยู่ในฟอร์ม —
+        // ถามยืนยันก่อนทิ้งข้อมูลนั้น (เดิมเช็คแค่ "อีกฝั่งเดียว" พอมี 3 โหมด
+        // ต้องเช็คทั้ง 2 โหมดที่เหลือ)
+        const dirtyMode = ENTRY_MODES.find(m => m !== mode && formHasData(m));
+        if (dirtyMode && !confirmDiscard(modeLabels[mode], modeLabels[dirtyMode])) return;
+        ENTRY_MODES.filter(m => m !== mode).forEach(m => clearFormCompletely(m));
+        switchEntryMode(mode);
+      };
+    });
+
     renderIpmOrderHint();
-    formIpm.addEventListener('submit', onSubmitIpm);
-    formNew.addEventListener('submit', onSubmitNew);
+    modeForms.ipm.addEventListener('submit', onSubmitIpm);
+    modeForms.new.addEventListener('submit', onSubmitNew);
+    modeForms.rework.addEventListener('submit', onSubmitRework);
     document.getElementById('ipm-number_alpl').addEventListener('blur', updateIpmPackageSizeLock);
-    document.getElementById('btn-edit-ipm').onclick = () => unlockFormFields('ipm');
-    document.getElementById('btn-edit-new').onclick = () => unlockFormFields('new');
+    document.getElementById('rework-number_alpl').addEventListener('blur', updateReworkPrefill);
+    ENTRY_MODES.forEach(mode => {
+      document.getElementById(`btn-edit-${mode}`).onclick = () => unlockFormFields(mode);
+    });
 
     const peModal = document.getElementById('pe-modal');
     document.getElementById('pe-modal-close').onclick = closePeModal;
@@ -1622,6 +1736,8 @@
       document.getElementById('entry-mode-ipm').click();
     } else if (newQueue) {
       document.getElementById('entry-mode-new').click();
+    } else if (reworkQueue) {
+      document.getElementById('entry-mode-rework').click();
     }
     document.getElementById('pe-modal').classList.add('open');
   }
@@ -1635,14 +1751,14 @@
   function renderPartEntrySummary() {
     const el = document.getElementById('part-entry-summary');
     const badgeLg = document.getElementById('pe-mode-badge-lg');
-    const queue = ipmQueue || newQueue;
+    const queue = ipmQueue || newQueue || reworkQueue;
 
     if (!queue) {
       // ไม่มีคิว → empty state เสมอ (ไม่ว่าจะมี measurement หรือไม่)
       badgeLg.style.display = 'none';
       el.innerHTML = `
         <div class="pe-empty">
-          ยังไม่มีข้อมูล Part Entry ค้างอยู่ — กด "New Entry" เพื่อเตรียมคิว IPM หรือลงทะเบียน Part ใหม่
+          ยังไม่มีข้อมูล Part Entry ค้างอยู่ — กด "New Entry" เพื่อเตรียมคิว IPM, ลงทะเบียน Part ใหม่ หรือส่ง Rework
         </div>
         <div style="margin-top:1rem; text-align:center">
           <button class="btn-pe-action" id="btn-pe-open">+ New Entry</button>
@@ -1652,18 +1768,19 @@
     }
 
     // มีคิวค้างอยู่ → แสดง collapsible dropdown (ทั้งก่อน Start และระหว่างวัด)
-    const isIpm = !!ipmQueue;
+    const mode = ipmQueue ? 'ipm' : newQueue ? 'new' : 'rework';
+    const modeLabel = mode === 'ipm' ? 'IPM' : mode === 'new' ? 'New' : 'Rework';
     badgeLg.style.display = '';
-    badgeLg.textContent   = isIpm ? 'IPM' : 'New';
-    badgeLg.className     = `pe-mode-badge-lg ${isIpm ? 'ipm' : 'new'}`;
+    badgeLg.textContent   = modeLabel;
+    badgeLg.className     = `pe-mode-badge-lg ${mode}`;
 
-    const baseRows = isIpm
+    const baseRows = mode === 'ipm'
       ? [
           ['Number ALPL',  queue.list.join(', ')],
           ['Operator',     queue.operator],
-          ['Note',         queue.note || '—'],
         ]
-      : [
+      : mode === 'new'
+      ? [
           ['Number ALPL',      queue.list.join(', ')],
           ['Operator',          queue.operator],
           ['Note',              queue.note || '—'],
@@ -1674,9 +1791,23 @@
           ['Vendor',            queue.fields.vendor         || '—'],
           null,
           ['Purchase Order No', queue.fields.po_number      != null ? queue.fields.po_number            : '—'],
-          ['Category',          queue.fields.category       || '—'],
           ['Package Size',      queue.fields.package_size   || '—'],
           ['Owner',             queue.fields.owner          || '—'],
+          ['Receive Date',      queue.fields.recieve_date   || '—'],
+        ]
+      : [
+          ['Number ALPL',      queue.list.join(', ')],
+          ['Operator',          queue.operator],
+          null,
+          ['Part Number',       queue.fields.part_number],
+          ['Handler',           queue.fields.handler        || '—'],
+          ['Description',       queue.fields.description    || '—'],
+          ['Vendor',            queue.fields.vendor         || '—'],
+          null,
+          ['Purchase Order No', queue.fields.po_number      != null ? queue.fields.po_number            : '—'],
+          ['Package Size',      queue.fields.package_size   || '—'],
+          ['Owner',             queue.fields.owner          || '—'],
+          ['Receive Date',      queue.fields.recieve_date   || '—'],
         ];
 
     const gridRows = baseRows.map(row => {
@@ -1717,7 +1848,11 @@
     if (btnPeOpen) btnPeOpen.onclick = openPeModal;
   }
 
-  function otherPrefix(prefix) { return prefix === 'ipm' ? 'new' : 'ipm'; }
+  // ── [แก้ไข] คืน prefix อื่นๆ ทั้งหมดที่ไม่ใช่ตัวที่ระบุ — เดิมมีแค่ 2 โหมด
+  // (ipm/new) เลย hardcode คืนแค่ "อีกฝั่งเดียว" ได้ พอมี Rework เป็นโหมดที่ 3
+  // ต้องคืนเป็น array ของโหมดที่เหลือทั้งหมดแทน (ใช้ตอน lock/unlock ปุ่ม toggle
+  // ของโหมดอื่นๆ ทุกตัว ไม่ใช่แค่ตัวเดียว)
+  function otherPrefixes(prefix) { return ENTRY_MODES.filter(p => p !== prefix); }
 
   function formHasData(prefix) {
     const form = document.getElementById(`form-${prefix}`);
@@ -1742,9 +1877,11 @@
     form.querySelectorAll('input, textarea').forEach(el => { el.disabled = true; });
     document.getElementById(`btn-submit-${prefix}`).style.display = 'none';
     document.getElementById(`btn-edit-${prefix}`).style.display = '';
-    const otherBtn = document.getElementById(`entry-mode-${otherPrefix(prefix)}`);
-    otherBtn.disabled = true;
-    otherBtn.title = `กด Edit ในฟอร์ม ${prefix.toUpperCase()} ก่อน ถ้าต้องการสลับโหมด`;
+    otherPrefixes(prefix).forEach(p => {
+      const otherBtn = document.getElementById(`entry-mode-${p}`);
+      otherBtn.disabled = true;
+      otherBtn.title = `กด Edit ในฟอร์ม ${prefix.toUpperCase()} ก่อน ถ้าต้องการสลับโหมด`;
+    });
   }
 
   function unlockFormFields(prefix) {
@@ -1752,14 +1889,16 @@
     form.querySelectorAll('input, textarea').forEach(el => { el.disabled = false; });
     document.getElementById(`btn-edit-${prefix}`).style.display = 'none';
     document.getElementById(`btn-submit-${prefix}`).style.display = '';
-    const otherBtn = document.getElementById(`entry-mode-${otherPrefix(prefix)}`);
-    otherBtn.disabled = false;
-    otherBtn.title = '';
+    otherPrefixes(prefix).forEach(p => {
+      const otherBtn = document.getElementById(`entry-mode-${p}`);
+      otherBtn.disabled = false;
+      otherBtn.title = '';
+    });
   }
 
   function renderIpmOrderHint() {
       const msg = 'ℹ️ ลำดับ ALPL ที่กรอกจะถูกใช้ map กับค่าที่วัดได้ตามลำดับ ตอนกด Start ในรอบถัดไป';
-      ['ipm-order-hint', 'new-order-hint'].forEach(id => {
+      ['ipm-order-hint', 'new-order-hint', 'rework-order-hint'].forEach(id => {
         const hint = document.getElementById(id);
         if (!hint) return;
         hint.className = 'entry-session-hint';
@@ -1767,9 +1906,14 @@
       });
   }
 
+  // ── [แก้ไข] เดิม hardcode ternary "prefix === 'ipm' ? 'ipm' : 'new'" ซึ่งจริงๆ
+  // แล้วเท่ากับ `prefix` ตรงๆ อยู่แล้ว (บั๊กแฝง ใช้ได้พอดีเพราะเดิมมีแค่ 2 ค่า
+  // เป็นไปได้ 'ipm'/'new') พอเพิ่ม 'rework' เข้ามาตัว ternary เดิมจะ resolve
+  // ผิดเป็น 'new' เสมอ ทำให้ error/ไฮไลต์ของฟอร์ม Rework ไม่ถูก clear ตัดออก
+  // แล้วใช้ `prefix` ตรงๆ ไปเลย (form id คือ `form-${prefix}` อยู่แล้วทุกโหมด)
   function clearFieldErrors(prefix) {
     document.querySelectorAll(`[id^="err-${prefix}-"]`).forEach(el => el.textContent = '');
-    document.querySelectorAll(`#form-${prefix === 'ipm' ? 'ipm' : 'new'} input, #form-${prefix === 'ipm' ? 'ipm' : 'new'} textarea`)
+    document.querySelectorAll(`#form-${prefix} input, #form-${prefix} textarea`)
       .forEach(el => el.classList.remove('invalid'));
   }
 
@@ -1805,17 +1949,22 @@
     return parts;
   }
 
+  // ── [แก้ไข] เดิมเช็คแค่ mode === 'ipm' (ต้องลงทะเบียนแล้ว) กับ else (ต้องยัง
+  // ไม่ลงทะเบียน — ใช้กับ 'new' เท่านั้นตอนนั้น) พอเพิ่ม 'rework' ที่ต้องการ
+  // เงื่อนไขเดียวกับ 'ipm' (ต้องลงทะเบียนแล้วเหมือนกัน) จึงกลับเงื่อนไขหลักมา
+  // เช็คที่ 'new' แทน แล้วให้ 'ipm'/'rework' ใช้ else ร่วมกัน
   function checkAlplExistence(numberAlplList, mode) {
     const registeredSet = new Set(parts.map(p => p.number_alpl));
-    if (mode === 'ipm') {
-      const notRegistered = numberAlplList.filter(n => !registeredSet.has(n));
-      if (notRegistered.length > 0) {
-        return `ALPL ${notRegistered.join(', ')} ยังไม่ได้ลงทะเบียนชิ้นงานนี้ — กรุณาไปลงทะเบียนที่แท็บ New ก่อน`;
-      }
-    } else {
+    if (mode === 'new') {
       const alreadyRegistered = numberAlplList.filter(n => registeredSet.has(n));
       if (alreadyRegistered.length > 0) {
         return `ALPL ${alreadyRegistered.join(', ')} ลงทะเบียนชิ้นงานนี้ไปแล้ว`;
+      }
+    } else {
+      // ipm / rework: ต้องเคยลงทะเบียนผ่าน New มาแล้วทั้งหมด
+      const notRegistered = numberAlplList.filter(n => !registeredSet.has(n));
+      if (notRegistered.length > 0) {
+        return `ALPL ${notRegistered.join(', ')} ยังไม่ได้ลงทะเบียนชิ้นงานนี้ — กรุณาไปลงทะเบียนที่แท็บ New ก่อน`;
       }
     }
     return null;
@@ -1846,6 +1995,35 @@
     }
   }
 
+  // ── Rework: auto-fill ทุกช่องด้วยข้อมูลเดิมของ ALPL ที่กรอก (ต้องเคยผ่าน New
+  // มาแล้ว) ยกเว้น Receive Date ที่เว้นว่างไว้เสมอให้ผู้ใช้กรอกวันที่รับกลับมา
+  // ใหม่ — ทำงานตอน blur ช่อง ALPL เหมือน updateIpmPackageSizeLock ข้างบน
+  async function updateReworkPrefill() {
+    const raw = document.getElementById('rework-number_alpl').value.trim();
+    if (!raw) return;
+    const { list, error } = parseAlplList(raw);
+    if (error !== undefined && error) return; // รูปแบบผิด ปล่อยให้ submit เป็นคนแจ้ง error เต็มๆ
+    if (!list || list.length !== 1) return;   // ไม่ใช่ 1 ALPL เป๊ะๆ — ปล่อยให้ submit แจ้ง error แทน
+
+    await refreshParts();
+    const found = parts.find(p => p.number_alpl === list[0]);
+    if (!found) {
+      setFieldError('rework', 'number_alpl', `ALPL ${list[0]} ยังไม่เคยลงทะเบียน — ไปที่แท็บ New ก่อน`);
+      return;
+    }
+    clearFieldErrors('rework');
+    document.getElementById('rework-part_number').value  = found.part_number ?? '';
+    document.getElementById('rework-handler').value      = found.handler ?? '';
+    document.getElementById('rework-vendor').value       = found.vendor ?? '';
+    document.getElementById('rework-description').value  = found.description ?? '';
+    document.getElementById('rework-po_number').value    = found.po_number ?? '';
+    document.getElementById('rework-package_size').value = found.package_size ?? '';
+    document.getElementById('rework-owner').value        = found.owner ?? '';
+    // Receive Date เว้นว่างเสมอ — ผู้ใช้ต้องกรอกวันที่รับชิ้นงานกลับมาใหม่เอง
+    // ไม่ใช่ค่าเดิมตอนที่เคยลงทะเบียนผ่าน New ครั้งแรก
+    document.getElementById('rework-receive_date').value = '';
+  }
+
   async function onSubmitIpm(ev) {
     ev.preventDefault();
     clearFieldErrors('ipm');
@@ -1853,7 +2031,6 @@
     const numberAlplRaw = document.getElementById('ipm-number_alpl').value.trim();
     const operator      = document.getElementById('ipm-operator').value.trim();
     const packageSize   = document.getElementById('ipm-package_size').value.trim();
-    const note          = document.getElementById('ipm-note').value.trim();
 
     const { list: numberAlplList, error: alplError } = parseAlplList(numberAlplRaw);
 
@@ -1922,7 +2099,8 @@
     }
 
     newQueue = null;
-    ipmQueue = { list: numberAlplList, operator, note: note || null };
+    reworkQueue = null;
+    ipmQueue = { list: numberAlplList, operator };
     savePartEntryState();
     renderSessionUI();
     renderPartEntrySummary();
@@ -1932,7 +2110,6 @@
       number_alpl:  numberAlplList,
       measure_type: 'IPM',
       Operator:     operator,
-      note:         note || null,
     };
     console.log('[IPM submit — frontend only]', payload);
     const statusEl = document.getElementById('ipm-status');
@@ -1991,7 +2168,6 @@
     if (!val('handler')) { setFieldError('new', 'handler', 'เลือก Handler'); hasError = true; }
     if (!val('vendor')) { setFieldError('new', 'vendor', 'เลือก Vendor'); hasError = true; }
     if (!val('description')) { setFieldError('new', 'description', 'กรอก Description'); hasError = true; }
-    if (!val('category')) { setFieldError('new', 'category', 'เลือก Category'); hasError = true; }
     if (!val('owner')) { setFieldError('new', 'owner', 'เลือก Owner'); hasError = true; }
     numericFields.forEach(f => {
       const raw = val(f);
@@ -2015,9 +2191,9 @@
       description:    toStrOrNull('description'),
       vendor:         toStrOrNull('vendor'),
       po_number:      toNumOrNull('po_number'),
-      category:       toStrOrNull('category'),
       package_size:   toStrOrNull('package_size'),
       owner:          toStrOrNull('owner'),
+      recieve_date:   toStrOrNull('receive_date'),
     };
     const note = val('note') || null;
     console.log('[New part submit — frontend only]', payload);
@@ -2025,6 +2201,7 @@
     updateSession({ target_count: numberAlplList.length, measured_count: 0 });
 
     ipmQueue = null;
+    reworkQueue = null;
     newQueue = { list: numberAlplList, fields: payload, note, operator };
     savePartEntryState();
     renderSessionUI();
@@ -2034,6 +2211,98 @@
     statusEl.className = 'entry-status success';
     statusEl.textContent = `✔ บันทึกสำเร็จ ${numberAlplList.length} ALPL`;
     lockFormFields('new');
+    closePeModal();
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  }
+
+  // ── Rework: งานที่เคยลงทะเบียนผ่าน New แล้ว ไม่ผ่าน ถูกส่งไป Rework แล้วส่ง
+  // กลับมาวัดใหม่ — ต่างจาก New ตรงที่ ALPL ต้อง "เคยลงทะเบียนแล้ว" เท่านั้น
+  // (checkAlplExistence โหมด 'rework' เช็คตรงข้ามกับ 'new') และรับได้ทีละ 1
+  // ALPL เท่านั้น เพราะฟอร์มนี้ auto-fill/แก้ config ของ Part เดิม 1 ตัวเป๊ะๆ
+  // ไม่ใช่ config กลางที่ใช้ซ้ำกับหลาย ALPL ได้แบบ New (ALPL แต่ละตัวที่ Rework
+  // กลับมามีประวัติเดิมของตัวเองไม่เหมือนกัน แชร์ config เดียวกันไม่ได้)
+  async function onSubmitRework(ev) {
+    ev.preventDefault();
+    clearFieldErrors('rework');
+
+    const val = id => document.getElementById(`rework-${id}`).value.trim();
+    const numberAlplRaw = val('number_alpl');
+    const operator       = val('operator');
+
+    const { list: numberAlplList, error: alplError } = parseAlplList(numberAlplRaw);
+    let alplHasError = false;
+    if (alplError === null) {
+      setFieldError('rework', 'number_alpl', 'กรอก ALPL 1 ค่า');
+      alplHasError = true;
+    } else if (alplError) {
+      setFieldError('rework', 'number_alpl', `"${alplError}" ไม่ใช่เลข ALPL ที่ถูกต้อง (ต้องเป็นเลขจำนวนเต็มบวก)`);
+      alplHasError = true;
+    } else if (numberAlplList.length !== 1) {
+      setFieldError('rework', 'number_alpl', 'Rework รองรับทีละ 1 ALPL เท่านั้น — กรอกทีละตัว แล้วกด Start ทีละรอบ');
+      alplHasError = true;
+    } else {
+      await refreshParts();
+      const existenceError = checkAlplExistence(numberAlplList, 'rework');
+      if (existenceError) {
+        setFieldError('rework', 'number_alpl', existenceError);
+        alplHasError = true;
+      }
+    }
+
+    const numericFields = ['po_number'];
+
+    let hasError = alplHasError;
+    if (!operator) { setFieldError('rework', 'operator', 'กรอกชื่อ Operator'); hasError = true; }
+    if (!val('part_number'))  { setFieldError('rework', 'part_number', 'กรอก Part Number'); hasError = true; }
+    if (!val('handler'))      { setFieldError('rework', 'handler', 'เลือก Handler'); hasError = true; }
+    if (!val('vendor'))       { setFieldError('rework', 'vendor', 'เลือก Vendor'); hasError = true; }
+    if (!val('description'))  { setFieldError('rework', 'description', 'กรอก Description'); hasError = true; }
+    if (!val('package_size')) { setFieldError('rework', 'package_size', 'กรอก Package Size'); hasError = true; }
+    if (!val('owner'))        { setFieldError('rework', 'owner', 'เลือก Owner'); hasError = true; }
+    // Receive Date บังคับกรอกเสมอใน Rework (ต่างจาก New ที่ optional) — คือ
+    // วันที่รับชิ้นงานกลับมาจริงจาก Rework ไม่ใช่วันที่ลงทะเบียนครั้งแรก
+    if (!val('receive_date')) { setFieldError('rework', 'receive_date', 'กรอกวันที่รับชิ้นงานกลับมา'); hasError = true; }
+    numericFields.forEach(f => {
+      const raw = val(f);
+      if (raw === '') {
+        setFieldError('rework', f, 'กรอก PO Number');
+        hasError = true;
+      } else if (isNaN(Number(raw))) {
+        setFieldError('rework', f, 'ต้องเป็นตัวเลข');
+        hasError = true;
+      }
+    });
+    if (hasError) return;
+
+    const toNumOrNull = f => { const raw = val(f); return raw === '' ? null : Number(raw); };
+    const toStrOrNull = f => { const raw = val(f); return raw === '' ? null : raw; };
+
+    const payload = {
+      number_alpl:    numberAlplList,
+      part_number:    val('part_number'),
+      handler:        toStrOrNull('handler'),
+      description:    toStrOrNull('description'),
+      vendor:         toStrOrNull('vendor'),
+      po_number:      toNumOrNull('po_number'),
+      package_size:   toStrOrNull('package_size'),
+      owner:          toStrOrNull('owner'),
+      recieve_date:   toStrOrNull('receive_date'),
+    };
+    console.log('[Rework submit — frontend only]', payload);
+
+    updateSession({ target_count: numberAlplList.length, measured_count: 0 });
+
+    ipmQueue = null;
+    newQueue = null;
+    reworkQueue = { list: numberAlplList, fields: payload, operator };
+    savePartEntryState();
+    renderSessionUI();
+    renderPartEntrySummary();
+
+    const statusEl = document.getElementById('rework-status');
+    statusEl.className = 'entry-status success';
+    statusEl.textContent = `✔ บันทึกสำเร็จ ${numberAlplList.length} ALPL`;
+    lockFormFields('rework');
     closePeModal();
     setTimeout(() => { statusEl.textContent = ''; }, 4000);
   }
@@ -2184,7 +2453,18 @@
   async function openReportModal(measurementId) {
     const m = measurements.find(x => x.measurement_id === measurementId);
     if (!m) return;
-    const part = findPartByAlpl(m.number_alpl);
+    // ดึงข้อมูล part "สด" จาก API ทุกครั้งที่เปิด report — cache `parts` ของ
+    // หน้านี้เก่าได้หลายทาง (part เพิ่งลงทะเบียนหลังเปิดหน้า, Rework เพิ่ง
+    // อัปเดต recieve_date ตอน start ฯลฯ) จะไล่ปิดทีละเคสไม่จบ ใช้
+    // GET /api/parts/{alpl} ที่คืน part ตัวเดียว (เบากว่า refreshParts ที่
+    // โหลดทั้งตาราง) ให้ report ตรงกับ DB เสมอ — ถ้า fetch พลาด (backend
+    // ล่มชั่วขณะ) ค่อย fallback ไปใช้ cache เดิมแทนที่จะโชว์ "—" ทั้งแผง
+    let part = null;
+    try {
+      const r = await fetch(`${API}/api/parts/${m.number_alpl}`);
+      if (r.ok) part = await r.json();
+    } catch (e) { console.warn('openReportModal: fetch part failed', e); }
+    if (!part) part = findPartByAlpl(m.number_alpl);
 
     document.getElementById('report-title').textContent = `Measurement report — ALPL ${m.number_alpl}`;
     const ts = m.timestamp ? new Date(m.timestamp).toLocaleString() : '—';
@@ -2204,10 +2484,10 @@
       ['Part number',  part?.part_number  || '—'],
       ['Handler',      part?.handler      || '—'],
       ['Vendor',       part?.vendor       || '—'],
-      ['Category',     part?.category     || '—'],
       ['Package size', part?.package_size || '—'],
       ['Owner',        part?.owner        || '—'],
       ['PO number',    part?.po_number != null ? part.po_number : '—'],
+      ['Receive date', part?.recieve_date ? new Date(part.recieve_date).toLocaleDateString() : '—'],
       ['Template',     part?.template_name || '—'],
     ];
     specsGrid.innerHTML = specRows.map(([label, value]) =>

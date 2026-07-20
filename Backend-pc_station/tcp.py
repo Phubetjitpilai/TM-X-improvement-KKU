@@ -45,8 +45,8 @@ def main():
         time.sleep(0.5)
         
         # Load Program
-        send_command(client_socket, "PW,3,021")
-        print("Waiting for program to load...\n")
+        send_command(client_socket, "PW,1,021")
+        #print("Waiting for program to load...\n")
         time.sleep(1.0) 
 
         # response_data = send_command(client_socket, "GM,0,0")
@@ -54,6 +54,7 @@ def main():
     
         # Get Measurement
         for j in range(5):
+            send_command(client_socket,"T1")
             response_data = send_command(client_socket, "GM,0,0").split(',')
             # time.sleep(0.5)
 

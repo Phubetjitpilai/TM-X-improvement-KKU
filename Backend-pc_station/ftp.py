@@ -1,21 +1,75 @@
+import threading
+
+# หมายเหตุ: ดีไซน์ "รับรูปได้ 1 ใบต่อ 1 trigger" ที่ทดสอบในไฟล์นี้ ถูกย้ายเข้าไป
+# รวมอยู่ใน agent.py แล้วจริงๆ (SingleShotImageHandler + arm_image_capture())
+# ไฟล์นี้เหลือไว้เป็นสคริปต์ทดสอบ FTP เดี่ยวๆ แยกจาก TCP/measurement flow
+# เท่านั้น ไม่ได้ถูกเรียกใช้จากส่วนอื่นของระบบอีกต่อไป — ของจริงให้ดูที่ agent.py
 from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
+FTP_USER = "INTERN_USER"
+FTP_PASS = "123456"
+FTP_HOME = "C:\\Users\\PMehom\\Desktop\\TM-X\\Images"
+
+# ── สิทธิ์ 2 ระดับ ─────────────────────────────────────────────────────────
+# LOCKED_PERM: ค่าเริ่มต้นเสมอ — เข้า/list โฟลเดอร์ได้ปกติ แต่ "อัปโหลดไม่ได้"
+#              (ไม่มี 'w' ในสิทธิ์ — โดน 550 Permission denied ตั้งแต่ระดับ
+#              โปรโตคอล ก่อนไฟล์จะเริ่มโอนเข้ามาด้วยซ้ำ)
+# ARMED_PERM:  สิทธิ์เต็มแบบเดิม — เปิดชั่วคราวหลัง trigger เพื่อรับรูปได้ 1 ใบ
+#              แล้วสลับกลับเป็น LOCKED_PERM ทันทีที่รับไฟล์เสร็จ (ดู
+#              on_file_received ด้านล่าง)
+LOCKED_PERM = "elr"
+ARMED_PERM = "elradfmw"
+
+authorizer = DummyAuthorizer()
+authorizer.add_user(FTP_USER, FTP_PASS, FTP_HOME, perm=LOCKED_PERM)
+
+
+class SingleShotFTPHandler(FTPHandler):
+    """FTPHandler ที่ยอมให้อัปโหลดไฟล์ได้ "1 ใบต่อ 1 trigger" เท่านั้น
+
+    ปกติ user จะมีแค่สิทธิ์อ่าน/list (LOCKED_PERM) — ส่งไฟล์ขึ้นมาไม่ได้เลย
+    จนกว่าจะมี trigger มา "ปลดล็อก" ให้ชั่วคราว (ตอนนี้ทดสอบด้วยการกด Enter
+    ที่ terminal ผ่าน _arm_loop() ด้านล่าง — ของจริงในอนาคตจะเปลี่ยนเป็น
+    agent.py เรียกตอนเริ่ม trigger วัดแต่ละชิ้นแทน) พอรับไฟล์ครบ 1 ใบ จะล็อก
+    สิทธิ์กลับทันที เพื่อกันไม่ให้ TM-X (หรือใครก็ตาม) ส่งรูปถัดไปเข้ามาซ้อน
+    จนกว่าจะมี trigger รอบใหม่
+    """
+
+    def on_file_received(self, file):
+        self.authorizer.override_user(self.username, perm=LOCKED_PERM)
+        print(f"📷 รับรูปแล้ว: {file} — ล็อกไม่ให้รับรูปเพิ่มจนกว่าจะมี trigger รอบถัดไป")
+
+
+def _arm_loop():
+    """โหมดทดสอบ: กด Enter ที่ terminal เพื่อ "ปลดล็อก" ให้รับรูปได้ 1 ใบถัดไป
+    (จุดนี้คือจุดที่ agent.py จะมาเรียกแทนในอนาคต ตอนเริ่ม trigger วัดแต่ละชิ้น
+    — ดู measurement_flow() ใน agent.py ที่มี input() เป็น placeholder ของ
+    trigger จาก MCU อยู่แล้วเหมือนกัน)
+    """
+    while True:
+        input("\nกด Enter เพื่อเปิดรับรูปถัดไป (1 ใบ): ")
+        authorizer.override_user(FTP_USER, perm=ARMED_PERM)
+        print("🔓 พร้อมรับรูปแล้ว 1 ใบ — รอ TM-X อัปโหลด...")
+
+
 def start_ftp():
-    authorizer = DummyAuthorizer()
-    
-    # กำหนด Username, Password, โฟลเดอร์ที่ใช้รับไฟล์ และสิทธิ์ 'elradfmw' (อ่าน/เขียน/แก้ไขได้เต็มที่)
-    authorizer.add_user("INTERN_USER", "123456", "C:\\Users\\PMehom\\Desktop\\TM-X\\Images", perm="elradfmw")
-    
-    handler = FTPHandler
+    handler = SingleShotFTPHandler
     handler.authorizer = authorizer
-    
+
     # ระบุ IP Address ของ PC คุณ (0.0.0.0 หมายถึงรับทุก IP ในเครื่อง)
     # พอร์ตมาตรฐานของ FTP คือ 21
     server = FTPServer(("0.0.0.0", 21), handler)
+
+    # thread แยกไว้รอรับ trigger (กด Enter) — ไม่บล็อก server หลักที่กำลัง
+    # serve_forever() อยู่
+    threading.Thread(target=_arm_loop, daemon=True).start()
+
     print("FTP Server is running... Waiting for Keyence images.")
+    print("(เริ่มต้นล็อกอยู่ — ต้องกด Enter ก่อนถึงจะรับรูปได้ 1 ใบ)")
     server.serve_forever()
+
 
 if __name__ == "__main__":
     start_ftp()
