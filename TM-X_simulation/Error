@@ -1,3 +1,17 @@
-CREATE USER 'pc_user'@'localhost' IDENTIFIED BY 'password';
-GRANT ALL PRIVILEGES ON tmx_db.* TO 'pc_user'@'localhost';
-FLUSH PRIVILEGES;
+✅ ได้รับคำสั่ง Start — template='201', จำนวน 1 ชิ้น
+INFO:     127.0.0.1:52470 - "POST /command HTTP/1.1" 200 OK
+
+ชิ้นที่ 1/1 — พิมพ์เริ่ม: l
+Exception in thread Thread-3 (measurement_flow):
+Traceback (most recent call last):
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\agent.py", line 278, in measurement_flow
+    image_path = arm_image_capture()
+                 ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\agent.py", line 129, in arm_image_capture
+    _ftp_authorizer.override_user(AGENT_FTP_USER, perm=_FTP_ARMED_PERM)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DummyAuthorizer' object has no attribute 'override_user'. Did you mean: 'override_perm'?
