@@ -61,6 +61,11 @@ def _arm_loop():
 def start_ftp():
     handler = SingleShotFTPHandler
     handler.authorizer = authorizer
+    # ล็อกช่วง passive port ไว้ให้แคบ — ถ้าไม่ตั้งไว้ pyftpdlib จะสุ่ม port
+    # สูงๆ ให้ทุกครั้งที่โอนไฟล์ ถ้า firewall ไม่ได้เปิดกว้างพอ จะได้รูปบางรอบ
+    # ไม่ได้บางรอบตามที่สุ่มได้ — ต้องเปิด firewall ให้ตรงกับช่วงนี้ด้วย (ค่า
+    # เดียวกับที่ agent.py ใช้จริง)
+    handler.passive_ports = range(60000, 60100)
 
     # ระบุ IP Address ของ PC คุณ (0.0.0.0 หมายถึงรับทุก IP ในเครื่อง)
     # พอร์ตมาตรฐานของ FTP คือ 21
