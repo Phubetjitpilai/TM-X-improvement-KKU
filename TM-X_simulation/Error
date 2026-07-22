@@ -1,84 +1,167 @@
-import threading
+🔓 พร้อมรับรูปแล้ว 1 ใบ — รอ TM-X อัปโหลด...
 
-# หมายเหตุ: ดีไซน์ "รับรูปได้ 1 ใบต่อ 1 trigger" ที่ทดสอบในไฟล์นี้ ถูกย้ายเข้าไป
-# รวมอยู่ใน agent.py แล้วจริงๆ (SingleShotImageHandler + arm_image_capture())
-# ไฟล์นี้เหลือไว้เป็นสคริปต์ทดสอบ FTP เดี่ยวๆ แยกจาก TCP/measurement flow
-# เท่านั้น ไม่ได้ถูกเรียกใช้จากส่วนอื่นของระบบอีกต่อไป — ของจริงให้ดูที่ agent.py
-from pyftpdlib.authorizers import DummyAuthorizer
-from pyftpdlib.handlers import FTPHandler
-from pyftpdlib.servers import FTPServer
+กด Enter เพื่อเปิดรับรูปถัดไป (1 ใบ): [I 2026-07-22 08:54:26] 192.168.10.11:3568-[] FTP session opened (connect)
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\tm-x\result\SD1_021 250
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] APPE C:\Users\Pjitpila\Desktop\Image\tm-x\result\SD1_021\260722_102419.txt completed=1 bytes=120 seconds=0.0
+📷 รับรูปแล้ว: C:\Users\Pjitpila\Desktop\Image\tm-x\result\SD1_021\260722_102419.txt — ล็อกไม่ให้รับรูปเพิ่มจนกว่าจะมี trigger รอบถัดไป
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:26] 192.168.10.11:3568-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3570-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3571-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3572-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3573-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3574-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3575-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3576-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3577-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3578-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3579-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3580-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3581-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3582-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3583-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3584-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3585-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3586-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3587-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3588-[INTERN_USER] FTP session closed (disconnect).
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[] FTP session opened (connect)
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[INTERN_USER] USER 'INTERN_USER' logged in.
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339\HEAD-A 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[INTERN_USER] CWD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'No such file or directory.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[INTERN_USER] MKD C:\Users\Pjitpila\Desktop\Image\260722_103339 550 'Not enough privileges.'
+[I 2026-07-22 08:54:27] 192.168.10.11:3589-[INTERN_USER] FTP session closed (disconnect).
+Exception in thread Thread-1 (_arm_loop):
+Traceback (most recent call last):
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\ftp.py", line 56, in _arm_loop
+    input("\nกด Enter เพื่อเปิดรับรูปถัดไป (1 ใบ): ")
+EOFError
+[I 2026-07-22 08:54:27] received interrupt signal
+[I 2026-07-22 08:54:28] >>> shutting down FTP server, pid=21840, 3 open socket(s) <<<
+[I 2026-07-22 08:54:28] 192.168.10.11:2909-[] FTP session closed (disconnect).
+[I 2026-07-22 08:54:28] 192.168.10.11:2910-[] FTP session closed (disconnect).
+PS C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station> 
 
-FTP_USER = "INTERN_USER"
-FTP_PASS = "123456"
-FTP_HOME = "C:\\Users\\PMehom\\Desktop\\TM-X\\Images"
-
-# ── สิทธิ์ 2 ระดับ ─────────────────────────────────────────────────────────
-# LOCKED_PERM: ค่าเริ่มต้นเสมอ — เข้า/list โฟลเดอร์ได้ปกติ แต่ "อัปโหลดไม่ได้"
-#              (ไม่มี 'w' ในสิทธิ์ — โดน 550 Permission denied ตั้งแต่ระดับ
-#              โปรโตคอล ก่อนไฟล์จะเริ่มโอนเข้ามาด้วยซ้ำ)
-# ARMED_PERM:  สิทธิ์เต็มแบบเดิม — เปิดชั่วคราวหลัง trigger เพื่อรับรูปได้ 1 ใบ
-#              แล้วสลับกลับเป็น LOCKED_PERM ทันทีที่รับไฟล์เสร็จ (ดู
-#              on_file_received ด้านล่าง)
-LOCKED_PERM = "elr"
-ARMED_PERM = "elradfmw"
-
-authorizer = DummyAuthorizer()
-authorizer.add_user(FTP_USER, FTP_PASS, FTP_HOME, perm=LOCKED_PERM)
-
-
-class SingleShotFTPHandler(FTPHandler):
-    """FTPHandler ที่ยอมให้อัปโหลดไฟล์ได้ "1 ใบต่อ 1 trigger" เท่านั้น
-
-    ปกติ user จะมีแค่สิทธิ์อ่าน/list (LOCKED_PERM) — ส่งไฟล์ขึ้นมาไม่ได้เลย
-    จนกว่าจะมี trigger มา "ปลดล็อก" ให้ชั่วคราว (ตอนนี้ทดสอบด้วยการกด Enter
-    ที่ terminal ผ่าน _arm_loop() ด้านล่าง — ของจริงในอนาคตจะเปลี่ยนเป็น
-    agent.py เรียกตอนเริ่ม trigger วัดแต่ละชิ้นแทน) พอรับไฟล์ครบ 1 ใบ จะล็อก
-    สิทธิ์กลับทันที เพื่อกันไม่ให้ TM-X (หรือใครก็ตาม) ส่งรูปถัดไปเข้ามาซ้อน
-    จนกว่าจะมี trigger รอบใหม่
-    """
-
-    def on_file_received(self, file):
-        # หมายเหตุ: ใช้ override_perm() ทับ home dir ตรงๆ ไม่ได้ (pyftpdlib
-        # โยน ValueError "can't override home directory permissions") และ
-        # DummyAuthorizer ก็ไม่มีเมธอด override_user() อยู่แล้วด้วย — วิธีที่
-        # ถูกต้องคือแก้ base permission ของ user ใน user_table ตรงๆ แบบนี้
-        self.authorizer.user_table[self.username]["perm"] = LOCKED_PERM
-        print(f"📷 รับรูปแล้ว: {file} — ล็อกไม่ให้รับรูปเพิ่มจนกว่าจะมี trigger รอบถัดไป")
-
-
-def _arm_loop():
-    """โหมดทดสอบ: กด Enter ที่ terminal เพื่อ "ปลดล็อก" ให้รับรูปได้ 1 ใบถัดไป
-    (จุดนี้คือจุดที่ agent.py จะมาเรียกแทนในอนาคต ตอนเริ่ม trigger วัดแต่ละชิ้น
-    — ดู measurement_flow() ใน agent.py ที่มี input() เป็น placeholder ของ
-    trigger จาก MCU อยู่แล้วเหมือนกัน)
-    """
-    while True:
-        input("\nกด Enter เพื่อเปิดรับรูปถัดไป (1 ใบ): ")
-        authorizer.user_table[FTP_USER]["perm"] = ARMED_PERM
-        print("🔓 พร้อมรับรูปแล้ว 1 ใบ — รอ TM-X อัปโหลด...")
-
-
-def start_ftp():
-    handler = SingleShotFTPHandler
-    handler.authorizer = authorizer
-    # ล็อกช่วง passive port ไว้ให้แคบ — ถ้าไม่ตั้งไว้ pyftpdlib จะสุ่ม port
-    # สูงๆ ให้ทุกครั้งที่โอนไฟล์ ถ้า firewall ไม่ได้เปิดกว้างพอ จะได้รูปบางรอบ
-    # ไม่ได้บางรอบตามที่สุ่มได้ — ต้องเปิด firewall ให้ตรงกับช่วงนี้ด้วย (ค่า
-    # เดียวกับที่ agent.py ใช้จริง)
-    handler.passive_ports = range(60000, 60100)
-
-    # ระบุ IP Address ของ PC คุณ (0.0.0.0 หมายถึงรับทุก IP ในเครื่อง)
-    # พอร์ตมาตรฐานของ FTP คือ 21
-    server = FTPServer(("0.0.0.0", 21), handler)
-
-    # thread แยกไว้รอรับ trigger (กด Enter) — ไม่บล็อก server หลักที่กำลัง
-    # serve_forever() อยู่
-    threading.Thread(target=_arm_loop, daemon=True).start()
-
-    print("FTP Server is running... Waiting for Keyence images.")
-    print("(เริ่มต้นล็อกอยู่ — ต้องกด Enter ก่อนถึงจะรับรูปได้ 1 ใบ)")
-    server.serve_forever()
-
-
-if __name__ == "__main__":
-    start_ftp()
