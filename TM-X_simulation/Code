@@ -1,0 +1,50 @@
+PS C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station> py -3.11 .\ftp.py       
+Traceback (most recent call last):
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\ftp.py", line 22, in <module>
+    start_ftp()
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\ftp.py", line 17, in start_ftp
+    server = FTPServer(("0.0.0.0", 21), handler)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyftpdlib\servers.py", line 117, in __init__
+    self.bind_af_unspecified(address_or_socket)
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyftpdlib\ioloop.py", line 1068, in bind_af_unspecified
+    raise OSError(err)
+OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+PS C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station> py -3.11 .\ftp.py
+Traceback (most recent call last):
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\ftp.py", line 22, in <module>
+    start_ftp()
+  File "C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station\ftp.py", line 17, in start_ftp
+    server = FTPServer(("0.0.0.0", 21), handler)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyftpdlib\servers.py", line 117, in __init__
+    self.bind_af_unspecified(address_or_socket)
+  File "C:\Users\Pjitpila\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyftpdlib\ioloop.py", line 1068, in bind_af_unspecified
+    raise OSError(err)
+OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+PS C:\Users\Pjitpila\Desktop\TM-X-improvement-KKU\Backend-pc_station> 
+
+
+
+# ชื่อไฟล์: run_ftp_server.py
+from pyftpdlib.authorizers import DummyAuthorizer
+from pyftpdlib.handlers import FTPHandler
+from pyftpdlib.servers import FTPServer
+
+def start_ftp():
+    authorizer = DummyAuthorizer()
+    
+    # กำหนด Username, Password, โฟลเดอร์ที่ใช้รับไฟล์ และสิทธิ์ 'elradfmw' (อ่าน/เขียน/แก้ไขได้เต็มที่)
+    authorizer.add_user("INTERN_USER", "123456", "C:\\Users\\Pjitpila\\Desktop\\Image", perm="elradfmw")
+    
+    handler = FTPHandler
+    handler.authorizer = authorizer
+    
+    # ระบุ IP Address ของ PC คุณ (0.0.0.0 หมายถึงรับทุก IP ในเครื่อง)
+    # พอร์ตมาตรฐานของ FTP คือ 21
+    server = FTPServer(("0.0.0.0", 21), handler)
+    print("FTP Server is running... Waiting for Keyence images.")
+    server.serve_forever()
+
+if __name__ == "__main__":
+    start_ftp()
